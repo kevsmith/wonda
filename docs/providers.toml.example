@@ -1,0 +1,50 @@
+# Wonda Providers Configuration
+# Copy this file to ~/.config/wonda/providers.toml and configure your providers
+#
+# API Key Environment Variables:
+# If api_key is not specified, Wonda looks for <PROVIDER_NAME>_API_KEY
+# where <PROVIDER_NAME> is transformed from the provider name using:
+#   1. Convert to uppercase
+#   2. Replace dashes (-) with underscores (_)
+#   3. Replace spaces with underscores (_)
+#
+# Examples:
+#   [providers.anthropic] → ANTHROPIC_API_KEY
+#   [providers.ollama-local] → OLLAMA_LOCAL_API_KEY
+#   [providers."my provider"] → MY_PROVIDER_API_KEY
+#
+# Provider Naming Requirements:
+#   - Must start with an alphabetic character (a-z, A-Z)
+#   - Can contain alphanumeric characters, dashes, and underscores
+
+# Anthropic Claude API
+# Get your API key from: https://console.anthropic.com/
+[providers.anthropic]
+base_url = "https://api.anthropic.com/v1"
+# api_key = "sk-ant-..."  # Or use ANTHROPIC_API_KEY environment variable
+
+# OpenAI API
+# Get your API key from: https://platform.openai.com/
+[providers.openai]
+base_url = "https://api.openai.com/v1"
+# api_key = "sk-..."  # Or use OPENAI_API_KEY environment variable
+
+# Google Gemini API
+# Get your API key from: https://makersuite.google.com/
+[providers.google]
+base_url = "https://generativelanguage.googleapis.com/v1"
+# api_key = "..."  # Or use GOOGLE_API_KEY environment variable
+
+# Ollama (self-hosted, no API key needed)
+# Install from: https://ollama.ai/
+[providers.ollama]
+base_url = "http://localhost:11434"
+
+# Example: Remote Ollama instance
+# [providers.ollama-server]
+# base_url = "http://192.168.1.100:11434"
+
+# Example: Custom provider
+# [providers.custom]
+# base_url = "https://my-llm-server.example.com/v1"
+# api_key = "custom-key-123"

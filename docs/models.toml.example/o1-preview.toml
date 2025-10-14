@@ -1,0 +1,10 @@
+# OpenAI o1 Reasoning Model
+# Thinking extraction is auto-detected based on model name
+
+name = "o1-preview"
+provider = "openai"
+
+# Optional: Override auto-detected thinking parser
+# [thinking_parser]
+# type = "out_of_band"
+# field_path = "reasoning.summary"

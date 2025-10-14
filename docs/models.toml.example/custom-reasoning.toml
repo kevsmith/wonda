@@ -1,0 +1,11 @@
+# Custom Reasoning Model
+# Example showing explicit thinking parser configuration
+# Use this pattern when auto-detection doesn't match your model's behavior
+
+name = "my-custom-reasoning-model"
+provider = "custom"
+
+[thinking_parser]
+type = "in_band"
+start_delimiter = "<reasoning>"
+end_delimiter = "</reasoning>"

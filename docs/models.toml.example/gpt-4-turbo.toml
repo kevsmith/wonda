@@ -1,0 +1,7 @@
+# OpenAI GPT-4 Turbo
+# No thinking/reasoning capabilities
+
+name = "gpt-4-turbo"
+provider = "openai"
+
+# No thinking parser needed - auto-detected as "none"

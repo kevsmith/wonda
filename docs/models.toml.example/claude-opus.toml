@@ -1,0 +1,10 @@
+# Anthropic Claude 3.5 Sonnet
+# Thinking extraction is auto-detected based on model name
+
+name = "claude-3-5-sonnet-20241022"
+provider = "anthropic"
+
+# Optional: Override auto-detected thinking parser
+# [thinking_parser]
+# type = "out_of_band"
+# field_path = "thinking"

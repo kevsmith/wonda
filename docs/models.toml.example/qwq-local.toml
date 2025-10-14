@@ -1,0 +1,12 @@
+# Qwen QwQ Reasoning Model (Local via Ollama)
+# Thinking extraction is auto-detected based on model name
+# Uses in-band delimiters: <think>...</think>
+
+name = "qwq-32b-preview"
+provider = "ollama"
+
+# Optional: Override auto-detected thinking parser
+# [thinking_parser]
+# type = "in_band"
+# start_delimiter = "<think>"
+# end_delimiter = "</think>"
