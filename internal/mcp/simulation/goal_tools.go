@@ -243,12 +243,13 @@ func NewVoteOnProposalTool(world *WorldState) *mcp.Tool {
 			}
 
 			// Check outcome
-			if proposal.Status == ProposalAccepted {
+			switch proposal.Status {
+case ProposalAccepted:
 				goal.CheckConsensus(world.CurrentTurn)
 				result["outcome"] = "accepted"
 				result["message"] = "Proposal accepted! Goal completed."
 				result["goal_completed"] = true
-			} else if proposal.Status == ProposalRejected {
+			case ProposalRejected:
 				result["outcome"] = "rejected"
 				result["message"] = "Proposal rejected. You can propose alternatives."
 			}

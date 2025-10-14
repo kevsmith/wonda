@@ -114,9 +114,10 @@ func (p *Proposal) EvaluateStatus(totalAgents int, turn int) {
 	yesVotes := 0
 	noVotes := 0
 	for _, vote := range p.Votes {
-		if vote.Choice == "yes" {
+		switch vote.Choice {
+		case "yes":
 			yesVotes++
-		} else if vote.Choice == "no" {
+		case "no":
 			noVotes++
 		}
 	}

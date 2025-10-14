@@ -454,9 +454,10 @@ func (s *Simulation) displayVotingResults() {
 					}
 				}
 
-				if proposal.Status == mcpsim.ProposalAccepted {
+				switch proposal.Status {
+				case mcpsim.ProposalAccepted:
 					fmt.Printf("  ✓ %s - Accepted (%d yes, %d no)\n", proposal.Description, yesCount, noCount)
-				} else if proposal.Status == mcpsim.ProposalRejected {
+				case mcpsim.ProposalRejected:
 					fmt.Printf("  ✗ %s - Rejected (%d yes, %d no)\n", proposal.Description, yesCount, noCount)
 				}
 			}
@@ -474,10 +475,11 @@ func (s *Simulation) printGoalSummary() {
 		statusSymbol := "○"
 		statusText := string(goal.Status)
 
-		if goal.Status == mcpsim.GoalCompleted {
+		switch goal.Status {
+		case mcpsim.GoalCompleted:
 			statusSymbol = "✓"
 			statusText = "COMPLETED"
-		} else if goal.Status == mcpsim.GoalFailed {
+		case mcpsim.GoalFailed:
 			statusSymbol = "✗"
 			statusText = "FAILED"
 		}
