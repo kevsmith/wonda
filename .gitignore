@@ -1,0 +1,22 @@
+# Provider configuration (contains API keys)
+providers.toml
+
+# .claude can contain secrets
+.claude/
+
+# Build artifacts
+/bin/
+/dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Built executable
+wonda
