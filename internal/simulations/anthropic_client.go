@@ -27,9 +27,14 @@ func newAnthropicClient(provider *config.Provider, model *config.Model, parser R
 	}
 
 	// Create Anthropic client
-	client := anthropic.NewClient(apiKey,
-		anthropic.WithBaseURL(provider.BaseURL),
-	)
+	// Note: Only override base URL if it's different from the default
+	opts := []anthropic.ClientOption{
+		anthropic.WithAPIVersion(anthropic.APIVersion20230601),
+	}
+	if provider.BaseURL != "" && provider.BaseURL != "https://api.anthropic.com" {
+		opts = append(opts, anthropic.WithBaseURL(provider.BaseURL))
+	}
+	client := anthropic.NewClient(apiKey, opts...)
 
 	return &AnthropicClient{
 		client:  client,
@@ -54,9 +59,19 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (ChatRespon
 			}
 			systemPrompt += msg.Content
 		case "user":
-			messages = append(messages, anthropic.NewUserTextMessage(msg.Content))
+			if msg.Content != "" {
+				messages = append(messages, anthropic.NewUserTextMessage(msg.Content))
+			}
 		case "assistant":
-			messages = append(messages, anthropic.NewAssistantTextMessage(msg.Content))
+			if msg.Content != "" {
+				messages = append(messages, anthropic.NewAssistantTextMessage(msg.Content))
+			}
+		case "tool":
+			// Anthropic expects tool results as user messages
+			// Skip empty tool messages
+			if msg.Content != "" {
+				messages = append(messages, anthropic.NewUserTextMessage(msg.Content))
+			}
 		default:
 			return ChatResponse{}, fmt.Errorf("unsupported message role: %s", msg.Role)
 		}

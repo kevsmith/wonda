@@ -71,7 +71,8 @@ func LoadModelFromFile(path string) (*Model, error) {
 }
 
 // LoadModelsFromDir loads all model configurations from a directory.
-// Returns a map of model name (without .toml extension) -> Model.
+// Returns a map of filename (without .toml extension) -> Model.
+// For example, "claude-sonnet.toml" will be keyed as "claude-sonnet".
 func LoadModelsFromDir(dirPath string) (map[string]*Model, error) {
 	models := make(map[string]*Model)
 
@@ -91,12 +92,9 @@ func LoadModelsFromDir(dirPath string) (map[string]*Model, error) {
 			return nil, fmt.Errorf("failed to load model from %s: %w", entry.Name(), err)
 		}
 
-		// Use the model's configured name as the key
-		if model.Name == "" {
-			return nil, fmt.Errorf("model in %s has no name configured", entry.Name())
-		}
-
-		models[model.Name] = model
+		// Use the filename (without .toml extension) as the key
+		modelKey := strings.TrimSuffix(entry.Name(), ".toml")
+		models[modelKey] = model
 	}
 
 	return models, nil

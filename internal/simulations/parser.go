@@ -1,8 +1,10 @@
 package simulations
 
 import (
-	"encoding/json"
 	"strings"
+
+	"github.com/ohler55/ojg/jp"
+	"github.com/ohler55/ojg/oj"
 )
 
 // NoOpParser is a ResponseParser that returns the entire response as the message
@@ -90,40 +92,70 @@ func (p *OutOfBandParser) FieldPath() string {
 	return p.fieldPath
 }
 
-// extractJSONField extracts a field value from a JSON object using a dot-notation path.
-// For example, "reasoning.summary" will extract obj["reasoning"]["summary"].
+// extractJSONField extracts a field value from a JSON object using JSONPath.
+// Supports array indexing: "choices[0].message.reasoning" or "choices.0.message.reasoning"
 // Returns empty string if the field doesn't exist or isn't a string.
 func extractJSONField(jsonData []byte, fieldPath string) string {
-	var data map[string]interface{}
-	if err := json.Unmarshal(jsonData, &data); err != nil {
+	// Parse JSON data
+	obj, err := oj.Parse(jsonData)
+	if err != nil {
 		return ""
 	}
 
-	// Split the path and traverse the object
-	parts := strings.Split(fieldPath, ".")
-	current := data
+	// Convert dot-notation to JSONPath format
+	// "choices.0.message.reasoning" -> "$.choices[0].message.reasoning"
+	jsonPath := convertToJSONPath(fieldPath)
 
-	for i, part := range parts {
-		value, exists := current[part]
-		if !exists {
-			return ""
-		}
+	// Parse and execute JSONPath
+	x, err := jp.ParseString(jsonPath)
+	if err != nil {
+		return ""
+	}
 
-		// If this is the last part, extract the string value
-		if i == len(parts)-1 {
-			if str, ok := value.(string); ok {
-				return str
-			}
-			return ""
-		}
+	results := x.Get(obj)
+	if len(results) == 0 {
+		return ""
+	}
 
-		// Otherwise, expect a nested object
-		if nested, ok := value.(map[string]interface{}); ok {
-			current = nested
-		} else {
-			return ""
-		}
+	// Return first result as string
+	if str, ok := results[0].(string); ok {
+		return str
 	}
 
 	return ""
+}
+
+// convertToJSONPath converts dot-notation paths to JSONPath format.
+// Examples:
+//   "choices.0.message.reasoning" -> "$.choices[0].message.reasoning"
+//   "reasoning.content" -> "$.reasoning.content"
+func convertToJSONPath(path string) string {
+	if !strings.HasPrefix(path, "$") {
+		path = "$." + path
+	}
+
+	// Convert numeric indices: .0. or .0 at end -> [0]
+	parts := strings.Split(path, ".")
+	var result strings.Builder
+
+	for i, part := range parts {
+		if i == 0 {
+			result.WriteString(part) // Write "$"
+			continue
+		}
+
+		// Check if this part is numeric
+		if len(part) > 0 && part[0] >= '0' && part[0] <= '9' {
+			result.WriteString("[")
+			result.WriteString(part)
+			result.WriteString("]")
+		} else {
+			if i > 1 || (i == 1 && parts[0] == "$") {
+				result.WriteString(".")
+			}
+			result.WriteString(part)
+		}
+	}
+
+	return result.String()
 }

@@ -15,7 +15,7 @@ func init() {
 	}
 	defaultConfig := path.Join(homeDir, ".config", "wonda")
 	rootCommand.PersistentFlags().StringVarP(&configDir, "config-dir", "c", defaultConfig, "path to Wonda configuration")
-	rootCommand.AddCommand(initCommand, nukeCommand, providersCommand, modelsCommand, charactersCommand, scenariosCommand)
+	rootCommand.AddCommand(initCommand, nukeCommand, providersCommand, embeddingsCommand, modelsCommand, charactersCommand, scenariosCommand)
 }
 
 var configDir string

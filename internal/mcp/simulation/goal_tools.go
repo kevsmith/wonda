@@ -119,7 +119,7 @@ func NewViewGoalTool(world *WorldState) *mcp.Tool {
 func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 	return &mcp.Tool{
 		Name:        "propose_solution",
-		Description: "Propose a solution for a goal (e.g., suggest a specific restaurant)",
+		Description: "Propose ONE specific solution for a goal. Each proposal must be a single, concrete choice - not a list of options.",
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -129,7 +129,7 @@ func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 				},
 				"solution": map[string]interface{}{
 					"type":        "string",
-					"description": "Your proposed solution (be specific, e.g., 'Bella's Italian Restaurant')",
+					"description": "Your proposed solution - must be ONE specific choice (e.g., 'Bella's Italian Restaurant'), NOT multiple options or alternatives",
 				},
 			},
 			"required": []string{"goal_name", "solution"},
@@ -161,10 +161,15 @@ func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 
 			proposalID := goal.AddProposal(agentName, solution, world.CurrentTurn)
 
+			// Auto-vote yes on own proposal (agents always support their own proposals)
+			if err := goal.Vote(proposalID, agentName, "yes", world.CurrentTurn); err != nil {
+				return nil, fmt.Errorf("failed to auto-vote on proposal: %w", err)
+			}
+
 			return map[string]interface{}{
 				"success":     true,
 				"proposal_id": proposalID,
-				"message":     fmt.Sprintf("Proposed: %s", solution),
+				"message":     fmt.Sprintf("Proposed: %s (auto-voted yes)", solution),
 			}, nil
 		},
 	}

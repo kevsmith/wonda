@@ -12,7 +12,7 @@ import (
 // Stores content under multiple canonical queries for reliable retrieval.
 func SeedCharacter(ctx context.Context, store *Store, agentName string, char *scenarios.Character) error {
 	// Identity: Core character information
-	identityContent := buildIdentityContent(char)
+	identityContent := buildIdentityContent(agentName, char)
 	if identityContent != "" {
 		identityQueries := []string{
 			"who am I?",
@@ -208,11 +208,14 @@ func SeedCharacter(ctx context.Context, store *Store, agentName string, char *sc
 }
 
 // buildIdentityContent creates a concise identity string from character basics.
-func buildIdentityContent(char *scenarios.Character) string {
+func buildIdentityContent(agentName string, char *scenarios.Character) string {
 	parts := make([]string, 0)
 
+	// Start with the agent's actual name
 	if char.Basics.Archetype != "" {
-		parts = append(parts, fmt.Sprintf("You are %s", char.Basics.Archetype))
+		parts = append(parts, fmt.Sprintf("Your name is %s. You are %s", agentName, char.Basics.Archetype))
+	} else {
+		parts = append(parts, fmt.Sprintf("Your name is %s", agentName))
 	}
 
 	if char.Basics.Description != "" {
@@ -225,8 +228,8 @@ func buildIdentityContent(char *scenarios.Character) string {
 // SeedOtherCharacter pre-seeds knowledge about another character.
 // Stores what this agent knows about another agent.
 func SeedOtherCharacter(ctx context.Context, store *Store, agentName string, targetName string, char *scenarios.Character) error {
-	// Build content about the other character
-	content := buildIdentityContent(char)
+	// Build content about the other character (include their actual name)
+	content := buildIdentityContent(targetName, char)
 	if content == "" {
 		return nil
 	}

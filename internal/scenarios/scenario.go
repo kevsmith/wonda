@@ -55,15 +55,14 @@ type InitialState struct {
 }
 
 type ScenarioDefaults struct {
-	Provider string `toml:"provider"`
-	Model    string `toml:"model"`
+	Model     string `toml:"model"`     // References a model name from models/*.toml (which knows its provider)
+	Embedding string `toml:"embedding"` // References an embedding name from [embeddings.*]
 }
 
 type Agent struct {
 	Name      string        `toml:"-"`
 	Character string        `toml:"character"`
-	Provider  string        `toml:"provider"`
-	Model     string        `toml:"model"`
+	Model     string        `toml:"model"` // Optional: override default model for this agent
 	Initial   *InitialState `toml:"-"`
 }
 

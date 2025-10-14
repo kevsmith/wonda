@@ -58,35 +58,46 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to load providers: %w", err)
 	}
 
-	// Validate embedding model availability
-	// Determine which provider to check (use default provider from scenario)
-	embeddingProvider := s.Scenario.Basics.Defaults
-	if embeddingProvider == nil || embeddingProvider.Provider == "" {
-		return fmt.Errorf("no default provider configured for embeddings")
+	// Load embeddings configuration
+	embeddings, err := config.LoadEmbeddingsFromFile(providersPath)
+	if err != nil {
+		return fmt.Errorf("failed to load embeddings: %w", err)
 	}
 
-	provider, ok := providers.Providers[embeddingProvider.Provider]
+	// Determine which embedding to use (from scenario defaults)
+	if s.Scenario.Basics.Defaults == nil || s.Scenario.Basics.Defaults.Embedding == "" {
+		return fmt.Errorf("no embedding configured in scenario defaults")
+	}
+
+	embeddingName := s.Scenario.Basics.Defaults.Embedding
+	embedding, err := embeddings.Get(embeddingName)
+	if err != nil {
+		return fmt.Errorf("failed to get embedding '%s': %w", embeddingName, err)
+	}
+
+	// Get the provider for this embedding
+	embeddingProvider, ok := providers.Providers[embedding.Provider]
 	if !ok {
-		return fmt.Errorf("embedding provider '%s' not found in providers.toml", embeddingProvider.Provider)
+		return fmt.Errorf("embedding provider '%s' not found for embedding '%s'", embedding.Provider, embeddingName)
 	}
 
-	fmt.Printf("Validating embedding model availability (%s)...\n", config.RequiredEmbeddingModel)
-	if err := config.ValidateEmbeddingModel(provider); err != nil {
+	fmt.Printf("Validating embedding model availability (%s via %s)...\n", embedding.Model, embedding.Provider)
+	if err := config.ValidateEmbeddingModel(embeddingProvider); err != nil {
 		return fmt.Errorf(`embedding model validation failed: %w
 
 The simulation requires %s for memory operations.
 
 To fix:
-  1. Ensure %s is running: %s serve
+  1. Ensure %s is running
   2. Pull the model: %s pull %s
   3. Retry the simulation
-`, err, config.RequiredEmbeddingModel, embeddingProvider.Provider, embeddingProvider.Provider, embeddingProvider.Provider, config.RequiredEmbeddingModel)
+`, err, embedding.Model, embedding.Provider, embedding.Provider, embedding.Model)
 	}
 	fmt.Printf("✓ Embedding model validated\n\n")
 
 	// Initialize memory store
 	fmt.Printf("Initializing memory store...\n")
-	embedder := memory.NewOllamaEmbedder(provider)
+	embedder := memory.NewOllamaEmbedder(embeddingProvider)
 	s.MemoryStore = memory.NewStore(embedder)
 
 	// Seed scenario context (shared across all agents)
@@ -112,31 +123,31 @@ To fix:
 			return fmt.Errorf("failed to load character %s for agent %s: %w", agentConfig.Character, agentName, err)
 		}
 
-		// Determine provider and model
-		providerName := agentConfig.Provider
+		// Determine which model to use
 		modelName := agentConfig.Model
-
 		// Use scenario defaults if not specified at agent level
-		if providerName == "" && s.Scenario.Basics.Defaults != nil {
-			providerName = s.Scenario.Basics.Defaults.Provider
-		}
 		if modelName == "" && s.Scenario.Basics.Defaults != nil {
 			modelName = s.Scenario.Basics.Defaults.Model
 		}
-
-		if providerName == "" || modelName == "" {
-			return fmt.Errorf("agent %s missing provider or model configuration", agentName)
+		if modelName == "" {
+			return fmt.Errorf("agent %s missing model configuration", agentName)
 		}
 
-		// Get provider and model configs
-		provider, ok := providers.Providers[providerName]
-		if !ok {
-			return fmt.Errorf("provider %s not found for agent %s", providerName, agentName)
-		}
-
+		// Get model config
 		model, ok := models[modelName]
 		if !ok {
 			return fmt.Errorf("model %s not found for agent %s", modelName, agentName)
+		}
+
+		// Get provider from model config
+		providerName := model.Provider
+		if providerName == "" {
+			return fmt.Errorf("model %s does not specify a provider", modelName)
+		}
+
+		provider, ok := providers.Providers[providerName]
+		if !ok {
+			return fmt.Errorf("provider %s (from model %s) not found for agent %s", providerName, modelName, agentName)
 		}
 
 		// Create LLM client
@@ -146,7 +157,8 @@ To fix:
 		}
 
 		// Create agent
-		agent := NewAgent(agentName, character, client, providerName, modelName)
+		// Use model.Name (API model ID) instead of modelName (map key)
+		agent := NewAgent(agentName, character, client, providerName, model.Name)
 
 		// Apply initial state overrides from scenario
 		agent.ApplyInitialState(agentConfig.Initial)
@@ -277,10 +289,10 @@ func (s *Simulation) Start(ctx context.Context) error {
 
 			// Display response
 			if response.Thinking != "" {
-				fmt.Printf("  (thinking: %s)\n", response.Thinking)
+				fmt.Printf("  🧠 Reasoning: %s\n", response.Thinking)
 			}
 			if response.Message != "" {
-				fmt.Printf("  \"%s\"\n", response.Message)
+				fmt.Printf("  💬 Says: \"%s\"\n", response.Message)
 			}
 
 			// Show any proposals made
@@ -301,8 +313,13 @@ func (s *Simulation) Start(ctx context.Context) error {
 			}
 		}
 
-		// Phase 2: Voting - agents vote on all pending proposals
-		fmt.Printf("\n─── Voting Phase ───\n")
+		// Check for automatic consensus (identical proposals)
+		if s.checkAutomaticConsensus(turn) {
+			// Goals completed via automatic consensus, skip voting
+			fmt.Printf("\n✨ Automatic consensus detected! Skipping voting phase.\n")
+		} else {
+			// Phase 2: Voting - agents vote on all pending proposals
+			fmt.Printf("\n─── Voting Phase ───\n")
 		votingTools := s.getVotingTools()
 		votingSituation := s.buildVotingPrompt()
 
@@ -325,10 +342,10 @@ func (s *Simulation) Start(ctx context.Context) error {
 
 			// Display response
 			if response.Thinking != "" {
-				fmt.Printf("  (thinking: %s)\n", response.Thinking)
+				fmt.Printf("  🧠 Reasoning: %s\n", response.Thinking)
 			}
 			if response.Message != "" {
-				fmt.Printf("  \"%s\"\n", response.Message)
+				fmt.Printf("  💬 Says: \"%s\"\n", response.Message)
 			}
 
 			// Show any votes cast
@@ -336,8 +353,9 @@ func (s *Simulation) Start(ctx context.Context) error {
 			s.displayNewVotes(agentName, votesBefore, votesAfter)
 		}
 
-		// Display voting results
-		s.displayVotingResults()
+			// Display voting results
+			s.displayVotingResults()
+		}
 
 		// Check if all goals are completed
 		if s.allGoalsCompleted() {
@@ -359,7 +377,13 @@ func (s *Simulation) Start(ctx context.Context) error {
 
 // getDeliberationTools returns only tools available during deliberation phase.
 func (s *Simulation) getDeliberationTools() []map[string]interface{} {
-	allowedTools := []string{"list_goals", "view_goal", "perceive", "speak", "propose_solution"}
+	allowedTools := []string{
+		// Memory tools - essential for discovering identity and context
+		"query_self", "query_background", "query_communication_style",
+		"query_scene", "query_character", "query_memory",
+		// Goal and interaction tools
+		"list_goals", "view_goal", "perceive", "speak", "propose_solution",
+	}
 	allTools := s.MCPServer.GetToolDefinitions()
 
 	filtered := []map[string]interface{}{}
@@ -380,7 +404,13 @@ func (s *Simulation) getDeliberationTools() []map[string]interface{} {
 
 // getVotingTools returns only tools available during voting phase.
 func (s *Simulation) getVotingTools() []map[string]interface{} {
-	allowedTools := []string{"view_goal", "vote_on_proposal"}
+	allowedTools := []string{
+		// Memory tools - agents still need access to their identity and memories
+		"query_self", "query_background", "query_communication_style",
+		"query_scene", "query_character", "query_memory",
+		// Voting tools
+		"view_goal", "vote_on_proposal",
+	}
 	allTools := s.MCPServer.GetToolDefinitions()
 
 	filtered := []map[string]interface{}{}
@@ -402,9 +432,34 @@ func (s *Simulation) getVotingTools() []map[string]interface{} {
 // buildDeliberationPrompt creates the prompt for deliberation phase.
 func (s *Simulation) buildDeliberationPrompt(turn int) string {
 	if turn == 1 {
-		return "DELIBERATION PHASE: Introduce yourself. Use list_goals to see available goals. Use perceive to observe. Discuss the goals with others using speak. If you want to suggest a solution, use propose_solution. DO NOT VOTE YET - voting happens in the next phase."
+		return `DELIBERATION PHASE (Turn 1):
+
+FIRST, discover your identity (required on first turn):
+1. Use query_self() to learn who you are
+2. Use query_scene() to understand where you are
+3. Use query_character(name) to learn about other agents present
+
+THEN, work on the goals:
+4. Use list_goals() to see what goals exist
+5. Use perceive() to see the current situation
+6. Use speak() to discuss with other agents
+7. Use propose_solution() to suggest ONE specific solution (not a list of options)
+
+IMPORTANT: Each proposal must be ONE single, concrete choice. Don't propose multiple alternatives - pick ONE.
+
+DO NOT VOTE YET - voting happens in the next phase.`
 	}
-	return "DELIBERATION PHASE: Use perceive to see what others said. Use view_goal to see existing proposals. Discuss with speak. You can propose new solutions with propose_solution. DO NOT VOTE YET - voting is next."
+	return `DELIBERATION PHASE:
+
+1. Use query_memory() to recall what happened previously
+2. Use perceive() to see what others just said
+3. Use view_goal() to check existing proposals
+4. Use speak() to discuss further
+5. Use propose_solution() to suggest ONE specific solution (not multiple options)
+
+IMPORTANT: Each proposal = ONE choice. If you want to suggest alternatives, make separate proposals.
+
+DO NOT VOTE YET - voting is in the next phase.`
 }
 
 // buildVotingPrompt creates the prompt for voting phase.
@@ -435,13 +490,14 @@ func (s *Simulation) buildVotingPrompt() string {
 	return fmt.Sprintf(`VOTING PHASE: Now you must vote on proposals.%s
 
 INSTRUCTIONS:
-1. Use view_goal("goal_name") to see all PENDING proposals with their IDs
-2. For EACH pending proposal, call vote_on_proposal("goal_name", "proposal_id", "yes" or "no") ONCE
+1. Use view_goal("goal_name") to see all PENDING proposals with their IDs and votes
+2. For EACH pending proposal that YOU DID NOT PROPOSE, call vote_on_proposal("goal_name", "proposal_id", "yes" or "no") ONCE
 3. Vote based on YOUR character values and preferences
-4. If you get an error saying a proposal is "rejected" or "accepted", STOP trying to vote on it - it's already resolved
-5. Once you've voted on each pending proposal once, you're done - just say "Voting complete"
+4. SKIP proposals you made - you already auto-voted yes on those when you proposed them
+5. If you get an error saying a proposal is "rejected" or "accepted", STOP trying to vote on it - it's already resolved
+6. Once you've voted on all relevant proposals, you're done - just say "Voting complete"
 
-Vote on each pending proposal exactly once. Don't retry if you get errors about rejected/accepted proposals.`, proposalList)
+Remember: You automatically voted yes on any proposals you made. Only vote on OTHER agents' proposals.`, proposalList)
 }
 
 // allGoalsCompleted checks if all goals have been completed.
@@ -468,7 +524,7 @@ func (s *Simulation) displayNewProposals(agentName string) {
 	for _, goal := range s.World.Goals {
 		for _, proposal := range goal.Proposals {
 			if proposal.ProposedBy == agentName && proposal.ProposedAt == s.World.CurrentTurn {
-				fmt.Printf("  → Proposes: %s\n", proposal.Description)
+				fmt.Printf("  🔨 Proposes: %s\n", proposal.Description)
 			}
 		}
 	}
@@ -508,7 +564,7 @@ func (s *Simulation) displayNewVotes(agentName string, before, after map[string]
 					if voteAfter == "yes" {
 						voteSymbol = "✓"
 					}
-					fmt.Printf("  → Votes %s on: %s\n", voteSymbol, proposal.Description)
+					fmt.Printf("  🔨 Votes %s on: %s\n", voteSymbol, proposal.Description)
 				}
 			}
 		}
@@ -631,4 +687,76 @@ func (s *Simulation) captureEpisodicMemory(ctx context.Context, agentName, conte
 			"speaker":  agentName,
 		},
 	})
+}
+
+// checkAutomaticConsensus detects when all agents have made identical proposals.
+// If consensus is detected, auto-accepts the proposal and returns true.
+func (s *Simulation) checkAutomaticConsensus(turn int) bool {
+	foundConsensus := false
+
+	for _, goal := range s.World.Goals {
+		// Only check pending goals
+		if goal.Status != mcpsim.GoalPending {
+			continue
+		}
+
+		// Get all proposals made this turn
+		turnProposals := make([]*mcpsim.Proposal, 0)
+		for _, proposal := range goal.Proposals {
+			if proposal.ProposedAt == turn && proposal.Status == mcpsim.ProposalPending {
+				turnProposals = append(turnProposals, proposal)
+			}
+		}
+
+		// Need exactly as many proposals as agents
+		if len(turnProposals) != len(s.TurnOrder) {
+			continue
+		}
+
+		// Check if all proposals have identical descriptions
+		if len(turnProposals) == 0 {
+			continue
+		}
+
+		firstDescription := turnProposals[0].Description
+		allIdentical := true
+		for _, proposal := range turnProposals[1:] {
+			if proposal.Description != firstDescription {
+				allIdentical = false
+				break
+			}
+		}
+
+		if allIdentical {
+			// Auto-accept the first proposal (they're all the same)
+			acceptedProposal := turnProposals[0]
+
+			// Mark all agents as having voted yes
+			for _, agentName := range s.TurnOrder {
+				acceptedProposal.Votes[agentName] = &mcpsim.Vote{
+					AgentName: agentName,
+					Choice:    "yes",
+					VotedAt:   turn,
+				}
+			}
+
+			// Update proposal status
+			acceptedProposal.Status = mcpsim.ProposalAccepted
+			acceptedProposal.ResolvedAt = turn
+
+			// Mark other identical proposals as withdrawn
+			for _, proposal := range turnProposals[1:] {
+				proposal.Status = mcpsim.ProposalWithdrawn
+				proposal.ResolvedAt = turn
+			}
+
+			// Complete the goal
+			goal.CheckConsensus(turn)
+
+			fmt.Printf("\n  🎯 Goal '%s': All agents proposed \"%s\"\n", goal.Name, firstDescription)
+			foundConsensus = true
+		}
+	}
+
+	return foundConsensus
 }

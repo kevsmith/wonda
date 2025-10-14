@@ -254,7 +254,7 @@ func NewQueryMemoryTool(store *memory.Store) *mcp.Tool {
 			"properties": map[string]interface{}{
 				"query": map[string]interface{}{
 					"type":        "string",
-					"description": "What you want to remember (e.g., 'what did Alice say about restaurants?')",
+					"description": "What you want to remember (e.g., 'what did [other agent] say about the goal?')",
 				},
 			},
 			"required": []string{"query"},

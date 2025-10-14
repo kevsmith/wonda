@@ -1,9 +1,13 @@
 package simulations
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"regexp"
 	"strings"
 
@@ -18,6 +22,8 @@ type OpenAIClient struct {
 	model    *config.Model
 	parser   ResponseParser
 	modelID  string
+	baseURL  string
+	apiKey   string
 }
 
 // newOpenAIClient creates a new OpenAI-compatible client.
@@ -39,11 +45,25 @@ func newOpenAIClient(provider *config.Provider, model *config.Model, parser Resp
 		model:    model,
 		parser:   parser,
 		modelID:  model.Name,
+		baseURL:  provider.BaseURL,
+		apiKey:   apiKey,
 	}, nil
 }
 
 // Chat sends a chat completion request to an OpenAI-compatible API.
 func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	// If we have an out-of-band parser (need to extract custom fields like reasoning),
+	// use raw HTTP request to get full JSON response
+	if _, needsRawJSON := c.parser.(*OutOfBandParser); needsRawJSON {
+		return c.chatRaw(ctx, req)
+	}
+
+	// Otherwise use the go-openai library (faster, more reliable for standard fields)
+	return c.chatWithLibrary(ctx, req)
+}
+
+// chatWithLibrary uses the go-openai library for standard requests.
+func (c *OpenAIClient) chatWithLibrary(ctx context.Context, req ChatRequest) (ChatResponse, error) {
 	// Convert messages to OpenAI format
 	messages := make([]openai.ChatCompletionMessage, len(req.Messages))
 	for i, msg := range req.Messages {
@@ -127,11 +147,163 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse,
 		// We need to access the raw JSON to get the reasoning field
 		// For now, we'll marshal the response back to JSON and extract
 		if jsonData, err := json.Marshal(resp); err == nil {
-			thinking = extractJSONField(jsonData, outOfBandParser.FieldPath())
+			fieldPath := outOfBandParser.FieldPath()
+			thinking = extractJSONField(jsonData, fieldPath)
+
+			// Debug logging
+			if thinking == "" {
+				fmt.Printf("[DEBUG] Failed to extract reasoning from field path: %s\n", fieldPath)
+				// Write full response to file for inspection
+				if err := os.WriteFile("/tmp/wonda-llm-response.json", jsonData, 0644); err == nil {
+					fmt.Printf("[DEBUG] Full response written to: /tmp/wonda-llm-response.json\n")
+				}
+				// Print first 1000 chars of response for quick debugging
+				if len(jsonData) > 1000 {
+					fmt.Printf("[DEBUG] Response preview: %s...\n", string(jsonData[:1000]))
+				} else {
+					fmt.Printf("[DEBUG] Full response: %s\n", string(jsonData))
+				}
+			} else {
+				fmt.Printf("[DEBUG] Successfully extracted reasoning (%d chars)\n", len(thinking))
+			}
 		}
 	} else {
 		// For in-band parsers, parse the content text
 		content, thinking = c.parser.Parse(content)
+	}
+
+	return ChatResponse{
+		Message:   content,
+		Thinking:  thinking,
+		ToolCalls: toolCalls,
+	}, nil
+}
+
+// chatRaw makes a raw HTTP request to preserve all custom fields in the response.
+func (c *OpenAIClient) chatRaw(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	// Build request body
+	modelID := req.Model
+	if modelID == "" {
+		modelID = c.modelID
+	}
+
+	// Convert messages to proper format
+	messages := make([]map[string]interface{}, len(req.Messages))
+	for i, msg := range req.Messages {
+		messages[i] = map[string]interface{}{
+			"role":    msg.Role,
+			"content": msg.Content,
+		}
+	}
+
+	reqBody := map[string]interface{}{
+		"model":    modelID,
+		"messages": messages,
+	}
+
+	// Add tools if provided
+	if len(req.Tools) > 0 {
+		reqBody["tools"] = req.Tools
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	// Make HTTP request
+	// baseURL already includes /v1, just append the endpoint
+	url := strings.TrimRight(c.baseURL, "/") + "/chat/completions"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonBody))
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+
+	// Send request
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("http request failed: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	// Read response
+	respBody, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		return ChatResponse{}, fmt.Errorf("api error (status %d): %s", httpResp.StatusCode, string(respBody))
+	}
+
+	// Parse response to extract standard fields
+	var rawResp map[string]interface{}
+	if err := json.Unmarshal(respBody, &rawResp); err != nil {
+		return ChatResponse{}, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Extract message content
+	choices, ok := rawResp["choices"].([]interface{})
+	if !ok || len(choices) == 0 {
+		return ChatResponse{}, fmt.Errorf("no choices in response")
+	}
+
+	choice, ok := choices[0].(map[string]interface{})
+	if !ok {
+		return ChatResponse{}, fmt.Errorf("invalid choice format")
+	}
+
+	message, ok := choice["message"].(map[string]interface{})
+	if !ok {
+		return ChatResponse{}, fmt.Errorf("no message in choice")
+	}
+
+	content, _ := message["content"].(string)
+	content = cleanModelArtifacts(content)
+
+	// Extract tool calls
+	var toolCalls []ToolCall
+	if toolCallsRaw, ok := message["tool_calls"].([]interface{}); ok {
+		for _, tcRaw := range toolCallsRaw {
+			tc, ok := tcRaw.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			function, ok := tc["function"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			// Parse arguments
+			var args map[string]interface{}
+			if argsStr, ok := function["arguments"].(string); ok {
+				json.Unmarshal([]byte(argsStr), &args)
+			}
+
+			toolCalls = append(toolCalls, ToolCall{
+				ID:        tc["id"].(string),
+				Name:      function["name"].(string),
+				Arguments: args,
+			})
+		}
+	}
+
+	// Extract thinking using JSONPath on the raw JSON
+	var thinking string
+	if outOfBandParser, ok := c.parser.(*OutOfBandParser); ok {
+		fieldPath := outOfBandParser.FieldPath()
+		thinking = extractJSONField(respBody, fieldPath)
+
+		// Show thinking activity
+		if thinking != "" {
+			fmt.Printf("  🧠 %d chars\n", len(thinking))
+		}
 	}
 
 	return ChatResponse{
