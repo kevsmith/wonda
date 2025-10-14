@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/poiesic/wonda/internal/mcp"
+	"github.com/poiesic/wonda/internal/runtime"
 )
 
 // NewListGoalsTool creates the list_goals MCP tool.
@@ -134,7 +135,7 @@ func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 			"required": []string{"goal_name", "solution"},
 		},
 		Handler: func(ctx context.Context, arguments map[string]interface{}) (interface{}, error) {
-			agentName, ok := ctx.Value("agent_name").(string)
+			agentName, ok := ctx.Value(runtime.AgentNameKey).(string)
 			if !ok || agentName == "" {
 				return nil, fmt.Errorf("agent_name not found in context")
 			}
@@ -195,7 +196,7 @@ func NewVoteOnProposalTool(world *WorldState) *mcp.Tool {
 			"required": []string{"goal_name", "proposal_id", "vote"},
 		},
 		Handler: func(ctx context.Context, arguments map[string]interface{}) (interface{}, error) {
-			agentName, ok := ctx.Value("agent_name").(string)
+			agentName, ok := ctx.Value(runtime.AgentNameKey).(string)
 			if !ok || agentName == "" {
 				return nil, fmt.Errorf("agent_name not found in context")
 			}
@@ -280,7 +281,7 @@ func NewWithdrawProposalTool(world *WorldState) *mcp.Tool {
 			"required": []string{"goal_name", "proposal_id"},
 		},
 		Handler: func(ctx context.Context, arguments map[string]interface{}) (interface{}, error) {
-			agentName, ok := ctx.Value("agent_name").(string)
+			agentName, ok := ctx.Value(runtime.AgentNameKey).(string)
 			if !ok || agentName == "" {
 				return nil, fmt.Errorf("agent_name not found in context")
 			}

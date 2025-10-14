@@ -45,7 +45,7 @@ Agents utilize a dual-memory architecture:
 - **Short-term memory**: LLM context window for immediate situation
 - **Long-term memory**: RAG-based retrieval system for persistent memories
 
-See [RAG Memory System](./rag-memory-system.md) for detailed implementation.
+See [Memory System](./memory-system.md) for detailed implementation.
 
 ### 4. Decision Engine
 
@@ -202,4 +202,4 @@ Memory retrieval is encouraged through:
 - Pre-populated relevant memories each turn
 - Confidence gating requiring memory checks
 
-See [RAG Memory System](./rag-memory-system.md) for implementation details.
+See [Memory System](./memory-system.md) for implementation details.

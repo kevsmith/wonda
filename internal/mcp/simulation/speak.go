@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/poiesic/wonda/internal/mcp"
+	"github.com/poiesic/wonda/internal/runtime"
 )
 
 // SpeakResult contains confirmation of a speak action.
@@ -31,7 +32,7 @@ func NewSpeakTool(world *WorldState) *mcp.Tool {
 		},
 		Handler: func(ctx context.Context, arguments map[string]interface{}) (interface{}, error) {
 			// Get agent name from context
-			agentName, ok := ctx.Value("agent_name").(string)
+			agentName, ok := ctx.Value(runtime.AgentNameKey).(string)
 			if !ok || agentName == "" {
 				return nil, fmt.Errorf("agent_name not found in context")
 			}

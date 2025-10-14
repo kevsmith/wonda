@@ -103,8 +103,8 @@ func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]
 		{Role: "user", Content: systemPrompt},
 	}
 
-	// Tool execution loop - max 10 iterations to allow for complex workflows like voting
-	maxIterations := 10
+	// Tool execution loop - max 50 iterations to allow for complex workflows like voting
+	maxIterations := 50
 	for iteration := 0; iteration < maxIterations; iteration++ {
 		// Call LLM
 		req := ChatRequest{
@@ -170,24 +170,18 @@ func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]
 	}, fmt.Errorf("maximum tool execution iterations (%d) reached", maxIterations)
 }
 
-// Prompt template for agent turns
-const agentTurnTemplate = `You are {{.Name}}, {{.Character.Basics.Archetype}}.
+// Prompt template for agent turns - minimal, relies on memory queries
+const agentTurnTemplate = `You are {{.Name}}, an agent in a simulation. You have access to memory tools to discover who you are and your situation.
 
-{{.Character.Basics.Description}}
+MEMORY TOOLS (use these to understand yourself):
+- query_self(): Discover your core identity and personality
+- query_background(): Learn about your personal history
+- query_communication_style(): Understand how you communicate
+- query_scene(): Learn where you are and the current atmosphere
+- query_character(name): Learn about other agents
+- query_memory(question): Recall what has happened
 
-{{if .Character.Basics.Background}}
-BACKGROUND:
-{{.Character.Basics.Background}}
-{{end}}
-
-PERSONALITY:
-Traits: {{range $i, $t := .Character.Basics.Traits}}{{if $i}}, {{end}}{{$t}}{{end}}
-Communication Style: {{.Character.Basics.CommunicationStyle}}
-Decision Style: {{.Character.Basics.DecisionStyle}}
-{{if .Character.Basics.Skills}}Skills: {{range $i, $s := .Character.Basics.Skills}}{{if $i}}, {{end}}{{$s}}{{end}}{{end}}
-{{if .Character.Basics.Values}}Values: {{range $i, $v := .Character.Basics.Values}}{{if $i}}, {{end}}{{$v}}{{end}}{{end}}
-
-CURRENT STATE:
+CURRENT PHYSICAL STATE:
 Location: {{.State.Position}}
 Condition: {{.State.Condition}}/100
 Emotion: {{.State.Emotion}} (intensity {{.State.EmotionIntensity}}/10)
@@ -195,7 +189,7 @@ Emotion: {{.State.Emotion}} (intensity {{.State.EmotionIntensity}}/10)
 SITUATION:
 {{.Situation}}
 
-Stay true to your character traits, values, and personality. Use the available tools to accomplish what the situation asks.`
+First, use the memory tools to understand who you are and your situation. Then act according to your character. Be authentic - let your personality emerge through how you use the tools and what you choose to remember.`
 
 // buildPrompt creates the full prompt using the template system.
 func (a *Agent) buildPrompt(situation string) (string, error) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 
 	openai "github.com/sashabaranov/go-openai"
 
@@ -95,8 +97,8 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse,
 
 	message := resp.Choices[0].Message
 
-	// Extract message content
-	content := message.Content
+	// Extract message content and clean up model artifacts
+	content := cleanModelArtifacts(message.Content)
 
 	// Extract tool calls if present
 	var toolCalls []ToolCall
@@ -137,4 +139,31 @@ func (c *OpenAIClient) Chat(ctx context.Context, req ChatRequest) (ChatResponse,
 		Thinking:  thinking,
 		ToolCalls: toolCalls,
 	}, nil
+}
+
+// cleanModelArtifacts removes internal model tokens and artifacts from output text.
+// This cleans up responses from models that leak their function-calling format.
+func cleanModelArtifacts(text string) string {
+	// Common patterns to remove:
+	// - <|start|>...to=assistant
+	// - <|call|>, <|message|>, <|channel|>, <|constrain|>
+	// - Tool execution traces like "Tool 'name' returned:"
+
+	// Remove special tokens
+	patterns := []string{
+		`<\|start\|>[^<]*to=[^\s<]+`,       // <|start|>...to=assistant
+		`<\|call\|>`,                        // <|call|>
+		`<\|message\|>`,                     // <|message|>
+		`<\|channel\|>[^<]*`,                // <|channel|>...
+		`<\|constrain\|>[^\s<]+`,            // <|constrain|>json
+		`<\|end\|>`,                         // <|end|>
+		`Tool '[^']+' returned:\s*\{[^}]*\}`, // Tool execution traces
+	}
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		text = re.ReplaceAllString(text, "")
+	}
+
+	return strings.TrimSpace(text)
 }

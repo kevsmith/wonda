@@ -8,6 +8,8 @@ import (
 	"github.com/poiesic/wonda/internal/config"
 	"github.com/poiesic/wonda/internal/mcp"
 	mcpsim "github.com/poiesic/wonda/internal/mcp/simulation"
+	"github.com/poiesic/wonda/internal/memory"
+	"github.com/poiesic/wonda/internal/runtime"
 	"github.com/poiesic/wonda/internal/scenarios"
 )
 
@@ -21,8 +23,9 @@ type Simulation struct {
 	TurnOrder []string // Agent names in turn order
 
 	// MCP Server and World State
-	MCPServer *mcp.Server
-	World     *mcpsim.WorldState
+	MCPServer   *mcp.Server
+	World       *mcpsim.WorldState
+	MemoryStore *memory.Store
 }
 
 // NewSimulation creates a new simulation from a scenario.
@@ -54,6 +57,44 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load providers: %w", err)
 	}
+
+	// Validate embedding model availability
+	// Determine which provider to check (use default provider from scenario)
+	embeddingProvider := s.Scenario.Basics.Defaults
+	if embeddingProvider == nil || embeddingProvider.Provider == "" {
+		return fmt.Errorf("no default provider configured for embeddings")
+	}
+
+	provider, ok := providers.Providers[embeddingProvider.Provider]
+	if !ok {
+		return fmt.Errorf("embedding provider '%s' not found in providers.toml", embeddingProvider.Provider)
+	}
+
+	fmt.Printf("Validating embedding model availability (%s)...\n", config.RequiredEmbeddingModel)
+	if err := config.ValidateEmbeddingModel(provider); err != nil {
+		return fmt.Errorf(`embedding model validation failed: %w
+
+The simulation requires %s for memory operations.
+
+To fix:
+  1. Ensure %s is running: %s serve
+  2. Pull the model: %s pull %s
+  3. Retry the simulation
+`, err, config.RequiredEmbeddingModel, embeddingProvider.Provider, embeddingProvider.Provider, embeddingProvider.Provider, config.RequiredEmbeddingModel)
+	}
+	fmt.Printf("✓ Embedding model validated\n\n")
+
+	// Initialize memory store
+	fmt.Printf("Initializing memory store...\n")
+	embedder := memory.NewOllamaEmbedder(provider)
+	s.MemoryStore = memory.NewStore(embedder)
+
+	// Seed scenario context (shared across all agents)
+	fmt.Printf("Seeding scenario memories...\n")
+	if err := memory.SeedScenario(ctx, s.MemoryStore, s.Scenario); err != nil {
+		return fmt.Errorf("failed to seed scenario: %w", err)
+	}
+	fmt.Printf("✓ Seeded %d scenario memories\n", s.MemoryStore.CountByFilter(memory.Filter{Type: "scene"}))
 
 	// Load models configuration
 	modelsDir := path.Join(s.ConfigDir, "models")
@@ -110,6 +151,12 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 		// Apply initial state overrides from scenario
 		agent.ApplyInitialState(agentConfig.Initial)
 
+		// Seed character memories for this agent
+		fmt.Printf("  Seeding memories for %s...\n", agentName)
+		if err := memory.SeedCharacter(ctx, s.MemoryStore, agentName, character); err != nil {
+			return fmt.Errorf("failed to seed character memories for %s: %w", agentName, err)
+		}
+
 		// Store agent
 		s.Agents[agentName] = agent
 
@@ -119,9 +166,41 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 		// Register agent in world state
 		s.World.AddAgent(agentName, agent.State.Position)
 
-		fmt.Printf("Initialized agent: %s (character: %s, provider: %s, model: %s)\n",
+		fmt.Printf("  ✓ Initialized agent: %s (character: %s, provider: %s, model: %s)\n",
 			agentName, agentConfig.Character, providerName, modelName)
 	}
+
+	// Seed knowledge about other characters for each agent
+	fmt.Printf("\nSeeding inter-character knowledge...\n")
+	for agentName := range s.Scenario.Agents {
+		for otherAgentName, otherAgentConfig := range s.Scenario.Agents {
+			if agentName == otherAgentName {
+				continue
+			}
+
+			// Load other character
+			otherCharacterPath := path.Join(s.ConfigDir, "characters", otherAgentConfig.Character+".toml")
+			otherCharacter, err := scenarios.LoadCharacterFromFile(otherCharacterPath)
+			if err != nil {
+				return fmt.Errorf("failed to load character %s: %w", otherAgentConfig.Character, err)
+			}
+
+			// Seed knowledge
+			if err := memory.SeedOtherCharacter(ctx, s.MemoryStore, agentName, otherAgentName, otherCharacter); err != nil {
+				return fmt.Errorf("failed to seed knowledge about %s for %s: %w", otherAgentName, agentName, err)
+			}
+		}
+	}
+
+	fmt.Printf("✓ Memory store initialized with %d total memories\n\n", s.MemoryStore.Count())
+
+	// Register memory tools with MCP server
+	s.MCPServer.RegisterTool(mcpsim.NewQuerySelfTool(s.MemoryStore))
+	s.MCPServer.RegisterTool(mcpsim.NewQueryBackgroundTool(s.MemoryStore))
+	s.MCPServer.RegisterTool(mcpsim.NewQueryCommunicationStyleTool(s.MemoryStore))
+	s.MCPServer.RegisterTool(mcpsim.NewQuerySceneTool(s.MemoryStore))
+	s.MCPServer.RegisterTool(mcpsim.NewQueryCharacterTool(s.MemoryStore))
+	s.MCPServer.RegisterTool(mcpsim.NewQueryMemoryTool(s.MemoryStore))
 
 	return nil
 }
@@ -185,7 +264,7 @@ func (s *Simulation) Start(ctx context.Context) error {
 			fmt.Printf("\n[%s]\n", agentName)
 
 			// Create context with agent name
-			agentCtx := context.WithValue(ctx, "agent_name", agentName)
+			agentCtx := context.WithValue(ctx, runtime.AgentNameKey, agentName)
 
 			// Track proposals before this agent's turn
 			proposalsBefore := s.countProposals()
@@ -215,6 +294,11 @@ func (s *Simulation) Start(ctx context.Context) error {
 				s.World.ConversationHistory[len(s.World.ConversationHistory)-1].AgentName != agentName {
 				s.World.AddMessage(agentName, response.Message, response.Thinking)
 			}
+
+			// Capture episodic memory
+			if response.Message != "" {
+				s.captureEpisodicMemory(agentCtx, agentName, response.Message, turn)
+			}
 		}
 
 		// Phase 2: Voting - agents vote on all pending proposals
@@ -228,7 +312,7 @@ func (s *Simulation) Start(ctx context.Context) error {
 			fmt.Printf("\n[%s]\n", agentName)
 
 			// Create context with agent name
-			agentCtx := context.WithValue(ctx, "agent_name", agentName)
+			agentCtx := context.WithValue(ctx, runtime.AgentNameKey, agentName)
 
 			// Track votes before
 			votesBefore := s.collectVotes()
@@ -517,4 +601,34 @@ func (s *Simulation) printGoalSummary() {
 		}
 		fmt.Printf("\n")
 	}
+}
+
+// captureEpisodicMemory stores agent dialogue and actions as episodic memories.
+func (s *Simulation) captureEpisodicMemory(ctx context.Context, agentName, content string, turn int) {
+	if s.MemoryStore == nil {
+		return
+	}
+
+	// Format the content with speaker
+	episodicContent := fmt.Sprintf("%s said: %s", agentName, content)
+
+	// Embed the content
+	embedding, err := s.MemoryStore.Embed(ctx, episodicContent)
+	if err != nil {
+		// Log error but don't fail the simulation
+		fmt.Printf("  Warning: failed to embed episodic memory: %v\n", err)
+		return
+	}
+
+	// Store as episodic memory
+	s.MemoryStore.Add(memory.Memory{
+		Content:   episodicContent,
+		Embedding: embedding,
+		Metadata: map[string]string{
+			"type":     "episodic",
+			"category": "dialogue",
+			"turn":     fmt.Sprintf("%d", turn),
+			"speaker":  agentName,
+		},
+	})
 }
