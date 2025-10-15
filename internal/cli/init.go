@@ -40,7 +40,7 @@ var subdirs = []string{"models", "characters", "scenarios"}
 
 var initCommand = &cobra.Command{
 	Use:   "init",
-	Short: "initializes a new Wonda configuration",
+	Short: "Initialize new Wonda configuration",
 	Run:   initConfig,
 }
 

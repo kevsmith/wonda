@@ -13,35 +13,39 @@ import (
 
 var scenariosCommand = &cobra.Command{
 	Use:     "scenarios",
-	Short:   "Work with wonda scenario definitions",
+	Short:   "Manage scenario definitions",
 	Aliases: []string{"s"},
 }
 
 var showScenarioCommand = &cobra.Command{
-	Use:   "show <scenario-name>",
-	Short: "View a specific scenario definition",
-	Args:  cobra.ExactArgs(1),
-	Run:   showScenario,
+	Use:     "show <scenario-name>",
+	Short:   "Display scenario definition",
+	Aliases: []string{"s"},
+	Args:    cobra.ExactArgs(1),
+	Run:     showScenario,
 }
 
 var editScenarioCommand = &cobra.Command{
-	Use:   "edit <scenario-name>",
-	Short: "Open a scenario definition in $EDITOR",
-	Args:  cobra.ExactArgs(1),
-	Run:   editScenario,
+	Use:     "edit <scenario-name>",
+	Short:   "Edit scenario definition in $EDITOR",
+	Aliases: []string{"e"},
+	Args:    cobra.ExactArgs(1),
+	Run:     editScenario,
 }
 
 var newScenarioCommand = &cobra.Command{
-	Use:   "new <scenario-name>",
-	Short: "Create a new scenario definition",
-	Args:  cobra.ExactArgs(1),
-	Run:   newScenario,
+	Use:     "new <scenario-name>",
+	Short:   "Create new scenario definition",
+	Aliases: []string{"n"},
+	Args:    cobra.ExactArgs(1),
+	Run:     newScenario,
 }
 
 var listScenariosCommand = &cobra.Command{
-	Use:   "list",
-	Short: "List all available scenario definitions",
-	Run:   listScenarios,
+	Use:     "list",
+	Short:   "List all scenario definitions",
+	Aliases: []string{"l"},
+	Run:     listScenarios,
 }
 
 

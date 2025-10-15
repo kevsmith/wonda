@@ -11,26 +11,29 @@ import (
 
 var embeddingsCommand = &cobra.Command{
 	Use:     "embeddings",
-	Short:   "Work with wonda embedding configurations",
+	Short:   "Manage embedding configurations",
 	Aliases: []string{"e"},
 }
 
 var showEmbeddingCommand = &cobra.Command{
-	Use:   "show",
-	Short: "View embeddings configuration",
-	Run:   showEmbeddings,
+	Use:     "show",
+	Short:   "Display raw embeddings configuration",
+	Aliases: []string{"s"},
+	Run:     showEmbeddings,
 }
 
 var listEmbeddingsCommand = &cobra.Command{
-	Use:   "list",
-	Short: "List all configured embeddings",
-	Run:   listEmbeddings,
+	Use:     "list",
+	Short:   "List all embedding configurations",
+	Aliases: []string{"l"},
+	Run:     listEmbeddings,
 }
 
 var editEmbeddingsCommand = &cobra.Command{
-	Use:   "edit",
-	Short: "Open embeddings section in providers.toml in $EDITOR",
-	Run:   editEmbeddings,
+	Use:     "edit",
+	Short:   "Edit embeddings in providers.toml in $EDITOR",
+	Aliases: []string{"e"},
+	Run:     editEmbeddings,
 }
 
 

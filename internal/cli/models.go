@@ -12,35 +12,39 @@ import (
 
 var modelsCommand = &cobra.Command{
 	Use:     "models",
-	Short:   "Work with wonda model configuration",
+	Short:   "Manage model configurations",
 	Aliases: []string{"m"},
 }
 
 var showModelCommand = &cobra.Command{
-	Use:   "show <model-name>",
-	Short: "View a specific model configuration",
-	Args:  cobra.ExactArgs(1),
-	Run:   showModel,
+	Use:     "show <model-name>",
+	Short:   "Display model configuration",
+	Aliases: []string{"s"},
+	Args:    cobra.ExactArgs(1),
+	Run:     showModel,
 }
 
 var editModelCommand = &cobra.Command{
-	Use:   "edit <model-name>",
-	Short: "Open a model configuration in $EDITOR",
-	Args:  cobra.ExactArgs(1),
-	Run:   editModel,
+	Use:     "edit <model-name>",
+	Short:   "Edit model configuration in $EDITOR",
+	Aliases: []string{"e"},
+	Args:    cobra.ExactArgs(1),
+	Run:     editModel,
 }
 
 var newModelCommand = &cobra.Command{
-	Use:   "new <model-name>",
-	Short: "Create a new model configuration",
-	Args:  cobra.ExactArgs(1),
-	Run:   newModel,
+	Use:     "new <model-name>",
+	Short:   "Create new model configuration",
+	Aliases: []string{"n"},
+	Args:    cobra.ExactArgs(1),
+	Run:     newModel,
 }
 
 var listModelsCommand = &cobra.Command{
-	Use:   "list",
-	Short: "List all available model configurations",
-	Run:   listModels,
+	Use:     "list",
+	Short:   "List all model configurations",
+	Aliases: []string{"l"},
+	Run:     listModels,
 }
 
 

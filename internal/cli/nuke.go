@@ -9,7 +9,7 @@ import (
 
 var nukeCommand = &cobra.Command{
 	Use:   "nuke",
-	Short: "deletes a Wonda configuration",
+	Short: "Delete Wonda configuration",
 	Run:   deleteConfig,
 }
 

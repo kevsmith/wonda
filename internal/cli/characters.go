@@ -13,35 +13,39 @@ import (
 
 var charactersCommand = &cobra.Command{
 	Use:     "characters",
-	Short:   "Work with wonda character definitions",
+	Short:   "Manage character definitions",
 	Aliases: []string{"c"},
 }
 
 var showCharacterCommand = &cobra.Command{
-	Use:   "show <character-name>",
-	Short: "View a specific character definition",
-	Args:  cobra.ExactArgs(1),
-	Run:   showCharacter,
+	Use:     "show <character-name>",
+	Short:   "Display character definition",
+	Aliases: []string{"s"},
+	Args:    cobra.ExactArgs(1),
+	Run:     showCharacter,
 }
 
 var editCharacterCommand = &cobra.Command{
-	Use:   "edit <character-name>",
-	Short: "Open a character definition in $EDITOR",
-	Args:  cobra.ExactArgs(1),
-	Run:   editCharacter,
+	Use:     "edit <character-name>",
+	Short:   "Edit character definition in $EDITOR",
+	Aliases: []string{"e"},
+	Args:    cobra.ExactArgs(1),
+	Run:     editCharacter,
 }
 
 var newCharacterCommand = &cobra.Command{
-	Use:   "new <character-name>",
-	Short: "Create a new character definition",
-	Args:  cobra.ExactArgs(1),
-	Run:   newCharacter,
+	Use:     "new <character-name>",
+	Short:   "Create new character definition",
+	Aliases: []string{"n"},
+	Args:    cobra.ExactArgs(1),
+	Run:     newCharacter,
 }
 
 var listCharactersCommand = &cobra.Command{
-	Use:   "list",
-	Short: "List all available character definitions",
-	Run:   listCharacters,
+	Use:     "list",
+	Short:   "List all character definitions",
+	Aliases: []string{"l"},
+	Run:     listCharacters,
 }
 
 

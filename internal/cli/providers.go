@@ -10,20 +10,22 @@ import (
 
 var providersCommand = &cobra.Command{
 	Use:     "providers",
-	Short:   "Work with wonda provider configuration",
+	Short:   "Manage provider configurations",
 	Aliases: []string{"p"},
 }
 
 var showProviderCommand = &cobra.Command{
-	Use:   "show",
-	Short: "View providers configuration",
-	Run:   showProvider,
+	Use:     "show",
+	Short:   "Display provider configurations",
+	Aliases: []string{"s"},
+	Run:     showProvider,
 }
 
 var editProviderCommand = &cobra.Command{
-	Use:   "edit",
-	Short: "Open providers.toml in $EDITOR",
-	Run:   editProvider,
+	Use:     "edit",
+	Short:   "Edit providers.toml in $EDITOR",
+	Aliases: []string{"e"},
+	Run:     editProvider,
 }
 
 var editors = []string{"vi", "vim", "nvi", "nano"}
