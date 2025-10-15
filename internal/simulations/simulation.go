@@ -3,8 +3,14 @@ package simulations
 import (
 	"context"
 	"fmt"
+	"os"
 	"path"
+	"regexp"
+	"strings"
+	"time"
 
+	"github.com/oklog/ulid/v2"
+	"github.com/poiesic/wonda/internal/chronicle"
 	"github.com/poiesic/wonda/internal/config"
 	"github.com/poiesic/wonda/internal/mcp"
 	mcpsim "github.com/poiesic/wonda/internal/mcp/simulation"
@@ -15,6 +21,7 @@ import (
 
 // Simulation represents a running instance of a scenario.
 type Simulation struct {
+	ID        ulid.ULID // Unique identifier
 	Scenario  *scenarios.Scenario
 	Agents    map[string]*Agent
 	ConfigDir string
@@ -26,10 +33,18 @@ type Simulation struct {
 	MCPServer   *mcp.Server
 	World       *mcpsim.WorldState
 	MemoryStore *memory.Store
+
+	// Chronicle
+	chroniclePath   string             // Path to chronicle JSONL file
+	chronicleFile   *os.File           // Open file handle for appending
+	currentTurnEvents []chronicle.Event // Events being collected for current turn
 }
 
 // NewSimulation creates a new simulation from a scenario.
 func NewSimulation(scenario *scenarios.Scenario, configDir string) *Simulation {
+	// Generate unique ULID for this simulation
+	id := ulid.Make()
+
 	// Create world state from scenario
 	world := mcpsim.NewWorldState(
 		scenario.Basics.Location,
@@ -40,6 +55,7 @@ func NewSimulation(scenario *scenarios.Scenario, configDir string) *Simulation {
 	mcpServer := mcpsim.NewSimulationServer(world)
 
 	return &Simulation{
+		ID:        id,
 		Scenario:  scenario,
 		Agents:    make(map[string]*Agent),
 		ConfigDir: configDir,
@@ -217,12 +233,113 @@ To fix:
 	return nil
 }
 
+// initializeChronicle creates the chronicle file and writes the metadata line.
+func (s *Simulation) initializeChronicle() error {
+	// Generate chronicle filename
+	s.chroniclePath = s.getChronicleFilename()
+
+	// Create/open file for writing (append mode)
+	file, err := os.Create(s.chroniclePath)
+	if err != nil {
+		return fmt.Errorf("failed to create chronicle file: %w", err)
+	}
+	s.chronicleFile = file
+
+	// Create metadata
+	metadata := chronicle.NewMetadata(
+		s.ID,
+		s.Scenario.Basics.Name,
+		s.Scenario.Basics.Location,
+		s.Scenario.Basics.TOD,
+		s.Scenario.Basics.Atmosphere,
+	)
+
+	// Write metadata as first JSONL line
+	jsonBytes, err := chronicle.ToJSON(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	if _, err := s.chronicleFile.WriteString(string(jsonBytes) + "\n"); err != nil {
+		return fmt.Errorf("failed to write metadata: %w", err)
+	}
+
+	return nil
+}
+
+// captureEvent adds an event to the current turn's event list.
+func (s *Simulation) captureEvent(agentName, dialogue, reasoning string) {
+	// Get agent's current emotional state
+	agent := s.Agents[agentName]
+	event := chronicle.Event{
+		AgentName: agentName,
+		Dialogue:  dialogue,
+		Reasoning: reasoning,
+	}
+
+	// Capture emotion if available
+	if agent != nil {
+		event.Emotion = &chronicle.AgentEmotion{
+			Before: chronicle.EmotionState{
+				Emotion:   agent.State.Emotion,
+				Intensity: agent.State.EmotionIntensity,
+			},
+			After: chronicle.EmotionState{
+				Emotion:   agent.State.Emotion,
+				Intensity: agent.State.EmotionIntensity,
+			},
+		}
+	}
+
+	s.currentTurnEvents = append(s.currentTurnEvents, event)
+}
+
+// writeTurnToChronicle writes the current turn's events to the chronicle and clears them.
+func (s *Simulation) writeTurnToChronicle(turnNumber int) error {
+	if s.chronicleFile == nil {
+		return nil // Chronicle not initialized
+	}
+
+	// Create turn record
+	turn := chronicle.Turn{
+		Type:   "turn",
+		Number: turnNumber,
+		Events: s.currentTurnEvents,
+	}
+
+	// Convert to JSON
+	jsonBytes, err := chronicle.ToJSON(turn)
+	if err != nil {
+		return fmt.Errorf("failed to marshal turn: %w", err)
+	}
+
+	// Write to file
+	if _, err := s.chronicleFile.WriteString(string(jsonBytes) + "\n"); err != nil {
+		return fmt.Errorf("failed to write turn: %w", err)
+	}
+
+	// Clear events for next turn
+	s.currentTurnEvents = nil
+
+	return nil
+}
+
 // Start begins the simulation execution.
 // Runs multiple turns until goals are completed or max turns is reached.
 func (s *Simulation) Start(ctx context.Context) error {
 	if len(s.Agents) == 0 {
 		return fmt.Errorf("no agents initialized")
 	}
+
+	// Initialize chronicle
+	if err := s.initializeChronicle(); err != nil {
+		return fmt.Errorf("failed to initialize chronicle: %w", err)
+	}
+	defer func() {
+		if s.chronicleFile != nil {
+			s.chronicleFile.Close()
+		}
+	}()
 
 	// Display scenario information
 	fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
@@ -311,6 +428,9 @@ func (s *Simulation) Start(ctx context.Context) error {
 			if response.Message != "" {
 				s.captureEpisodicMemory(agentCtx, agentName, response.Message, turn)
 			}
+
+			// Capture event for chronicle
+			s.captureEvent(agentName, response.Message, response.Thinking)
 		}
 
 		// Check for automatic consensus (identical proposals)
@@ -351,10 +471,18 @@ func (s *Simulation) Start(ctx context.Context) error {
 			// Show any votes cast
 			votesAfter := s.collectVotes()
 			s.displayNewVotes(agentName, votesBefore, votesAfter)
+
+			// Capture event for chronicle
+			s.captureEvent(agentName, response.Message, response.Thinking)
 		}
 
 			// Display voting results
 			s.displayVotingResults()
+		}
+
+		// Write turn events to chronicle
+		if err := s.writeTurnToChronicle(turn); err != nil {
+			fmt.Printf("Warning: failed to write turn to chronicle: %v\n", err)
 		}
 
 		// Check if all goals are completed
@@ -372,6 +500,7 @@ func (s *Simulation) Start(ctx context.Context) error {
 	fmt.Printf("          Simulation Complete\n")
 	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
 	fmt.Printf("\nTotal turns: %d\n", s.World.CurrentTurn)
+	fmt.Printf("Chronicle saved to: %s\n", s.chroniclePath)
 	return nil
 }
 
@@ -759,4 +888,41 @@ func (s *Simulation) checkAutomaticConsensus(turn int) bool {
 	}
 
 	return foundConsensus
+}
+
+// getChronicleFilename generates the chronicle filename based on scenario and simulation ID.
+// Format: chronicle-<scenario-slug>-<timestamp>-<short-id>.jsonl
+func (s *Simulation) getChronicleFilename() string {
+	// Generate timestamp
+	timestamp := time.Now().Format("20060102-150405")
+
+	// Slugify scenario name
+	scenarioSlug := slugify(s.Scenario.Basics.Name)
+
+	// Get first 6 characters of ULID (lowercase)
+	shortID := strings.ToLower(s.ID.String()[0:6])
+
+	return fmt.Sprintf("chronicle-%s-%s-%s.jsonl", scenarioSlug, timestamp, shortID)
+}
+
+// slugify converts a string to a URL-safe slug.
+func slugify(s string) string {
+	// Convert to lowercase
+	s = strings.ToLower(s)
+
+	// Replace spaces with hyphens
+	s = strings.ReplaceAll(s, " ", "-")
+
+	// Remove non-alphanumeric characters (except hyphens)
+	reg := regexp.MustCompile("[^a-z0-9-]+")
+	s = reg.ReplaceAllString(s, "")
+
+	// Remove consecutive hyphens
+	reg = regexp.MustCompile("-+")
+	s = reg.ReplaceAllString(s, "-")
+
+	// Trim hyphens from start and end
+	s = strings.Trim(s, "-")
+
+	return s
 }

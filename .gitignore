@@ -20,3 +20,6 @@ providers.toml
 
 # Built executable
 wonda
+
+# Chronicle files
+chronicle*.jsonl
