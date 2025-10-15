@@ -43,24 +43,6 @@ var listModelsCommand = &cobra.Command{
 	Run:   listModels,
 }
 
-const modelTemplate = `# Model Configuration
-# See docs/providers-configuration.md for details
-
-name = ""
-provider = ""
-
-# Optional: thinking parser configuration
-# If not specified, auto-detection based on model name is used
-# [thinking_parser]
-# type = "none"  # or "in_band" or "out_of_band"
-
-# For in_band parsers:
-# start_delimiter = "<think>"
-# end_delimiter = "</think>"
-
-# For out_of_band parsers:
-# field_path = "thinking"
-`
 
 func init() {
 	modelsCommand.AddCommand(showModelCommand, editModelCommand, newModelCommand, listModelsCommand)
@@ -110,15 +92,21 @@ func newModel(cmd *cobra.Command, args []string) {
 		reportErrorAndDieP(modelsDir, err)
 	}
 
+	// Get template content
+	templateContent, err := config.GetTemplate("model")
+	if err != nil {
+		reportErrorAndDieS(fmt.Sprintf("Failed to load model template: %s", err.Error()))
+	}
+
 	// Create the file with template
-	if err := os.WriteFile(tomlFile, []byte(modelTemplate), 0644); err != nil {
+	if err := os.WriteFile(tomlFile, []byte(templateContent), 0644); err != nil {
 		reportErrorAndDieP(tomlFile, err)
 	}
 
 	reportSuccess(fmt.Sprintf("Created model configuration: %s", tomlFile))
 
 	// Validate the template
-	model, err := config.LoadModel([]byte(modelTemplate))
+	model, err := config.LoadModel([]byte(templateContent))
 	if err != nil {
 		reportWarning(fmt.Sprintf("Template validation warning: %s", err.Error()))
 	} else if err := model.Validate(); err != nil {

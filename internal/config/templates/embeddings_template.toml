@@ -1,0 +1,14 @@
+version = "1.0.0"
+
+# Add your embedding configurations below
+# Example:
+#
+# [embeddings.local-nomic]
+# provider = "ollama"
+# model = "nomic-ai/nomic-embed-text-v1.5-GGUF"
+# dimensions = 768
+#
+# [embeddings.openai-small]
+# provider = "openai"
+# model = "text-embedding-3-small"
+# dimensions = 1536

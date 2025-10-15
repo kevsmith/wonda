@@ -1,0 +1,19 @@
+version = "1.0.0"
+
+# Model Configuration
+# See docs/providers-configuration.md for details
+
+name = ""
+provider = ""
+
+# Optional: thinking parser configuration
+# If not specified, auto-detection based on model name is used
+# [thinking_parser]
+# type = "none"  # or "in_band" or "out_of_band"
+
+# For in_band parsers:
+# start_delimiter = "<think>"
+# end_delimiter = "</think>"
+
+# For out_of_band parsers:
+# field_path = "thinking"

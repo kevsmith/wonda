@@ -35,6 +35,7 @@ type ThinkingParserConfig struct {
 
 // Model represents a language model configuration.
 type Model struct {
+	Version      string  `toml:"version"`       // Configuration version
 	Name         string  `toml:"name"`          // API model identifier (e.g., "claude-3-5-sonnet-20241022")
 	Provider     string  `toml:"provider"`      // Reference to provider name from providers.toml
 	ThinkingParser *ThinkingParserConfig `toml:"thinking_parser,omitempty"` // Optional: auto-detected if nil
@@ -50,6 +51,11 @@ func NewModel() *Model {
 func LoadModel(data []byte) (*Model, error) {
 	m := NewModel()
 	if err := toml.Unmarshal(data, m); err != nil {
+		return nil, err
+	}
+
+	// Validate version
+	if err := ValidateVersion("model", m.Version); err != nil {
 		return nil, err
 	}
 

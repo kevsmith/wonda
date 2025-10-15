@@ -33,20 +33,6 @@ var editEmbeddingsCommand = &cobra.Command{
 	Run:   editEmbeddings,
 }
 
-const embeddingsTemplate = `
-# Add your embedding configurations below
-# Example:
-#
-# [embeddings.local-nomic]
-# provider = "ollama"
-# model = "nomic-ai/nomic-embed-text-v1.5-GGUF"
-# dimensions = 768
-#
-# [embeddings.openai-small]
-# provider = "openai"
-# model = "text-embedding-3-small"
-# dimensions = 1536
-`
 
 func init() {
 	embeddingsCommand.AddCommand(showEmbeddingCommand, listEmbeddingsCommand, editEmbeddingsCommand)
@@ -68,7 +54,10 @@ func showEmbeddings(cmd *cobra.Command, args []string) {
 		fmt.Println("No embeddings configured.")
 		fmt.Println("\nTo add embeddings, run: wonda embeddings edit")
 		fmt.Println("\nExample configuration:")
-		fmt.Println(embeddingsTemplate)
+		templateContent, err := config.GetTemplate("embeddings")
+		if err == nil {
+			fmt.Println(templateContent)
+		}
 		return
 	}
 

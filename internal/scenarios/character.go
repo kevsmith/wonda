@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/poiesic/wonda/internal/config"
 )
 
 type BasicCharacterInformation struct {
@@ -35,6 +36,12 @@ func LoadCharacter(data []byte) (*Character, error) {
 	if err := toml.Unmarshal(data, c); err != nil {
 		return nil, err
 	}
+
+	// Validate version
+	if err := config.ValidateVersion("character", c.Version); err != nil {
+		return nil, err
+	}
+
 	return c, nil
 }
 

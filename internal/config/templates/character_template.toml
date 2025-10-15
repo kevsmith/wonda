@@ -1,0 +1,29 @@
+version = "1.0.0"
+
+[basics]
+# Required: Character archetype or name
+archetype = ""
+
+# Required: Core definition of who/what the character is (10-1000 characters)
+description = ""
+
+# Optional: Categorization labels
+tags = []
+
+# Optional: Detailed history and context (max 2000 characters)
+background = ""
+
+# Required: How the character speaks and interacts (10-500 characters)
+communication_style = ""
+
+# Required: How the character makes choices (10-500 characters)
+decision_style = ""
+
+# Required: Behavioral characteristics (minimum 1)
+traits = []
+
+# Optional: Areas of expertise
+skills = []
+
+# Optional: Core beliefs and principles
+values = []

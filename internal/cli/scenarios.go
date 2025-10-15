@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/poiesic/wonda/internal/config"
 	"github.com/poiesic/wonda/internal/scenarios"
 	"github.com/spf13/cobra"
 )
@@ -43,63 +44,6 @@ var listScenariosCommand = &cobra.Command{
 	Run:   listScenarios,
 }
 
-const scenarioTemplate = `version = "1.0.0"
-
-[scenario]
-# Required: Scenario name (1-100 characters)
-name = ""
-
-# Required: What the scenario simulates (10-1000 characters)
-description = ""
-
-# Optional: Categorization labels
-tags = []
-
-# Required: Where the scene takes place
-location = ""
-
-# Required: Time of day or timestamp
-time = ""
-
-# Optional: Emotional/environmental tone
-atmosphere = ""
-
-# Optional: Maximum simulation runtime (default "30m")
-# Examples: "5m", "30m", "1h", "2h30m"
-max_runtime = "30m"
-
-# Optional: Default LLM configuration for all agents
-# [scenario.defaults]
-# provider = "anthropic"
-# model = "claude-3-5-sonnet-20241022"
-
-# Agents (minimum 1 required)
-# Each agent references a character archetype from characters/ directory
-# Example:
-# [agents.Alex]
-# character = "pragmatist"
-#
-# [agents.Jordan]
-# character = "enthusiast"
-
-# Optional: Override initial state for specific agents
-# Example:
-# [initial_state.Alex]
-# position = "living_room"
-# condition = 100
-# emotion = "neutral"
-# emotion_intensity = 5
-
-# Goals (minimum 1 required, maximum 8)
-# Example:
-# [goals.restaurant_agreement]
-# description = "Agree on which restaurant to eat at tonight"
-# priority = 1
-# assignment = ["Alex", "Jordan"]
-# type = "ConsensusGoal"
-# consensus_threshold = 1.0
-# tags = ["restaurant_choice", "food"]
-`
 
 func init() {
 	scenariosCommand.AddCommand(showScenarioCommand, editScenarioCommand, newScenarioCommand, listScenariosCommand)
@@ -149,15 +93,21 @@ func newScenario(cmd *cobra.Command, args []string) {
 		reportErrorAndDieP(scenariosDir, err)
 	}
 
+	// Get template content
+	templateContent, err := config.GetTemplate("scenario")
+	if err != nil {
+		reportErrorAndDieS(fmt.Sprintf("Failed to load scenario template: %s", err.Error()))
+	}
+
 	// Create the file with template
-	if err := os.WriteFile(tomlFile, []byte(scenarioTemplate), 0644); err != nil {
+	if err := os.WriteFile(tomlFile, []byte(templateContent), 0644); err != nil {
 		reportErrorAndDieP(tomlFile, err)
 	}
 
 	reportSuccess(fmt.Sprintf("Created scenario definition: %s", tomlFile))
 
 	// Validate the template (will fail validation due to empty fields, but that's expected)
-	_, err := scenarios.LoadScenario([]byte(scenarioTemplate))
+	_, err = scenarios.LoadScenario([]byte(templateContent))
 	if err != nil {
 		reportWarning(fmt.Sprintf("Template needs completion: %s", err.Error()))
 	}

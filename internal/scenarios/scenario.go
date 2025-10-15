@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pelletier/go-toml/v2"
+	"github.com/poiesic/wonda/internal/config"
 )
 
 // Duration wraps time.Duration to provide human-readable TOML marshaling/unmarshaling.
@@ -103,6 +104,11 @@ func NewScenario() *Scenario {
 func LoadScenario(data []byte) (*Scenario, error) {
 	s := NewScenario()
 	if err := toml.Unmarshal(data, s); err != nil {
+		return nil, err
+	}
+
+	// Validate version
+	if err := config.ValidateVersion("scenario", s.Version); err != nil {
 		return nil, err
 	}
 

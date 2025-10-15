@@ -6,6 +6,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/poiesic/wonda/internal/config"
 	"github.com/poiesic/wonda/internal/scenarios"
 	"github.com/spf13/cobra"
 )
@@ -43,33 +44,6 @@ var listCharactersCommand = &cobra.Command{
 	Run:   listCharacters,
 }
 
-const characterTemplate = `version = "1.0.0"
-
-[basics]
-# Required: Character archetype or name
-archetype = ""
-
-# Required: Core definition of who/what the character is (10-1000 characters)
-description = ""
-
-# Optional: Detailed history and context (max 2000 characters)
-background = ""
-
-# Required: How the character speaks and interacts (10-500 characters)
-communication_style = ""
-
-# Required: How the character makes choices (10-500 characters)
-decision_style = ""
-
-# Required: Behavioral characteristics (minimum 1)
-traits = []
-
-# Optional: Areas of expertise
-skills = []
-
-# Optional: Core beliefs and principles
-values = []
-`
 
 func init() {
 	charactersCommand.AddCommand(showCharacterCommand, editCharacterCommand, newCharacterCommand, listCharactersCommand)
@@ -119,15 +93,21 @@ func newCharacter(cmd *cobra.Command, args []string) {
 		reportErrorAndDieP(charactersDir, err)
 	}
 
+	// Get template content
+	templateContent, err := config.GetTemplate("character")
+	if err != nil {
+		reportErrorAndDieS(fmt.Sprintf("Failed to load character template: %s", err.Error()))
+	}
+
 	// Create the file with template
-	if err := os.WriteFile(tomlFile, []byte(characterTemplate), 0644); err != nil {
+	if err := os.WriteFile(tomlFile, []byte(templateContent), 0644); err != nil {
 		reportErrorAndDieP(tomlFile, err)
 	}
 
 	reportSuccess(fmt.Sprintf("Created character definition: %s", tomlFile))
 
 	// Validate the template (will fail validation due to empty fields, but that's expected)
-	_, err := scenarios.LoadCharacter([]byte(characterTemplate))
+	_, err = scenarios.LoadCharacter([]byte(templateContent))
 	if err != nil {
 		reportWarning(fmt.Sprintf("Template needs completion: %s", err.Error()))
 	}

@@ -1,0 +1,50 @@
+version = "1.0.0"
+
+[scenario]
+# Required: Scenario name
+name = ""
+
+# Required: What the scenario simulates
+description = ""
+
+# Optional: Categorization labels
+tags = []
+
+# Required: Where the scene takes place
+location = ""
+
+# Required: Time of day (e.g., "Morning", "Late afternoon", "Evening")
+tod = ""
+
+# Optional: Emotional/environmental tone
+atmosphere = ""
+
+# Optional: Default LLM configuration for all agents
+[scenario.defaults]
+model = ""
+embedding = ""
+
+# Goals (minimum 1 required)
+# Example:
+# [goals.decide_restaurant]
+# description = "Agree on a specific restaurant"
+# priority = 1
+
+# Agents (minimum 1 required)
+# Each agent references a character from characters/ directory
+# Example:
+# [agents.Alex]
+# character = "pragmatist"
+#
+# # Optional: Override initial state for this agent
+# [agents.Alex.initial]
+# position = "coffee_table"
+# emotion = "neutral"
+# emotion_intensity = 5
+#
+# [agents.Jordan]
+# character = "enthusiast"
+#
+# [agents.Jordan.initial]
+# position = "coffee_table"
+# emotion = "happy"

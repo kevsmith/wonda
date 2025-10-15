@@ -78,6 +78,7 @@ func (p *Provider) LoadFromEnvironment() error {
 //   - Must start with an alphabetic character (a-z, A-Z)
 //   - Can contain alphanumeric characters, dashes, and underscores
 type Providers struct {
+	Version   string              `toml:"version"`   // Configuration version
 	Providers map[string]*Provider `toml:"providers"`
 }
 
@@ -94,6 +95,12 @@ func LoadProviders(data []byte) (*Providers, error) {
 	if err := toml.Unmarshal(data, p); err != nil {
 		return nil, err
 	}
+
+	// Validate version
+	if err := ValidateVersion("providers", p.Version); err != nil {
+		return nil, err
+	}
+
 	for name, provider := range p.Providers {
 		provider.Name = name
 		if err := provider.LoadFromEnvironment(); err != nil {
