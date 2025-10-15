@@ -13,18 +13,20 @@ func init() {
 	// 1. --config-dir flag (handled by cobra automatically)
 	// 2. $WONDA_HOME environment variable
 	// 3. ~/.config/wonda (fallback)
-	defaultConfig := getDefaultConfigDir()
+	defaultConfig, source := getDefaultConfigDirWithSource()
 
-	rootCommand.PersistentFlags().StringVarP(&configDir, "config-dir", "c", defaultConfig, "path to Wonda configuration")
+	flagDescription := fmt.Sprintf("Path to Wonda configuration (source: %s)", source)
+	rootCommand.PersistentFlags().StringVarP(&configDir, "config-dir", "c", defaultConfig, flagDescription)
 	rootCommand.AddCommand(initCommand, nukeCommand, providersCommand, embeddingsCommand, modelsCommand, charactersCommand, scenariosCommand)
 }
 
-// getDefaultConfigDir returns the default configuration directory.
+// getDefaultConfigDirWithSource returns the default configuration directory
+// and a description of where it came from.
 // Checks $WONDA_HOME first, then falls back to ~/.config/wonda
-func getDefaultConfigDir() string {
+func getDefaultConfigDirWithSource() (string, string) {
 	// Check for WONDA_HOME environment variable
 	if wandaHome := os.Getenv("WONDA_HOME"); wandaHome != "" {
-		return wandaHome
+		return wandaHome, "$WONDA_HOME"
 	}
 
 	// Fallback to ~/.config/wonda
@@ -32,7 +34,7 @@ func getDefaultConfigDir() string {
 	if err != nil {
 		homeDir = "."
 	}
-	return path.Join(homeDir, ".config", "wonda")
+	return path.Join(homeDir, ".config", "wonda"), "default"
 }
 
 var configDir string
