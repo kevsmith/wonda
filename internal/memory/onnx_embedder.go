@@ -5,9 +5,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/daulet/tokenizers"
 	ort "github.com/yalue/onnxruntime_go"
+)
+
+var (
+	onnxInitOnce sync.Once
+	onnxInitErr  error
 )
 
 // ONNXEmbedder implements Embedder using ONNX Runtime for in-process embeddings.
@@ -53,9 +59,12 @@ func NewONNXEmbedder(modelDir string) (*ONNXEmbedder, error) {
 		return nil, fmt.Errorf("failed to load tokenizer: %w", err)
 	}
 
-	// Initialize ONNX Runtime
-	if err := ort.InitializeEnvironment(); err != nil {
-		return nil, fmt.Errorf("failed to initialize ONNX Runtime: %w", err)
+	// Initialize ONNX Runtime (once per process)
+	onnxInitOnce.Do(func() {
+		onnxInitErr = ort.InitializeEnvironment()
+	})
+	if onnxInitErr != nil {
+		return nil, fmt.Errorf("failed to initialize ONNX Runtime: %w", onnxInitErr)
 	}
 
 	// Create session options (we'll reuse these)
@@ -167,7 +176,9 @@ func (e *ONNXEmbedder) Embed(ctx context.Context, text string) ([]float32, error
 	return embedding, nil
 }
 
-// Destroy cleans up resources.
+// Destroy cleans up resources for this embedder instance.
+// Note: This does NOT destroy the ONNX environment (which is shared process-wide).
+// Call DestroyONNXEnvironment() once at program shutdown if needed.
 func (e *ONNXEmbedder) Destroy() error {
 	// Close tokenizer
 	if e.tokenizer != nil {
@@ -181,6 +192,12 @@ func (e *ONNXEmbedder) Destroy() error {
 		}
 	}
 
+	return nil
+}
+
+// DestroyONNXEnvironment cleans up the global ONNX Runtime environment.
+// This should only be called once at program shutdown, not per-instance.
+func DestroyONNXEnvironment() error {
 	return ort.DestroyEnvironment()
 }
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/poiesic/wonda/internal/config"
+	"github.com/poiesic/wonda/internal/memory"
 	"github.com/poiesic/wonda/internal/scenarios"
 	"github.com/poiesic/wonda/internal/simulations"
 	"github.com/spf13/cobra"
@@ -199,6 +200,9 @@ func listScenarios(cmd *cobra.Command, args []string) {
 }
 
 func runScenario(cmd *cobra.Command, args []string) {
+	// Ensure ONNX environment is cleaned up when simulation ends
+	defer memory.DestroyONNXEnvironment()
+
 	scenarioName := args[0]
 	if !strings.HasSuffix(scenarioName, ".toml") {
 		scenarioName = scenarioName + ".toml"
