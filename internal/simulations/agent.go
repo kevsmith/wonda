@@ -205,7 +205,6 @@ func (a *Agent) buildPrompt(situation string) (string, error) {
 	return buf.String(), nil
 }
 
-
 // String returns a string representation of the agent.
 func (a *Agent) String() string {
 	archetype := "unknown"

@@ -16,7 +16,8 @@ var FS embed.FS
 // The name should not include the "_template.toml" suffix - it will be added automatically.
 //
 // Example:
-//   content, err := templates.GetTemplate("scenario")  // reads scenario_template.toml
+//
+//	content, err := templates.GetTemplate("scenario")  // reads scenario_template.toml
 func GetTemplate(name string) (string, error) {
 	filename := name + "_template.toml"
 	content, err := FS.ReadFile(filename)

@@ -47,7 +47,6 @@ var listModelsCommand = &cobra.Command{
 	Run:     listModels,
 }
 
-
 func init() {
 	modelsCommand.AddCommand(showModelCommand, editModelCommand, newModelCommand, listModelsCommand)
 }

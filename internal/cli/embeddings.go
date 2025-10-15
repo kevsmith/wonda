@@ -36,7 +36,6 @@ var editEmbeddingsCommand = &cobra.Command{
 	Run:     editEmbeddings,
 }
 
-
 func init() {
 	embeddingsCommand.AddCommand(showEmbeddingCommand, listEmbeddingsCommand, editEmbeddingsCommand)
 }

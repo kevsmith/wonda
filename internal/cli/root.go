@@ -17,6 +17,7 @@ func init() {
 
 	flagDescription := fmt.Sprintf("Path to Wonda configuration (source: %s)", source)
 	rootCommand.PersistentFlags().StringVarP(&configDir, "config-dir", "c", defaultConfig, flagDescription)
+	rootCommand.PersistentFlags().StringVar(&logLevel, "log-level", "warn", "Log level (debug, info, warn, error)")
 	rootCommand.AddCommand(initCommand, nukeCommand, providersCommand, embeddingsCommand, modelsCommand, charactersCommand, scenariosCommand, versionCommand)
 }
 
@@ -38,11 +39,15 @@ func getDefaultConfigDirWithSource() (string, string) {
 }
 
 var configDir string
+var logLevel string
 
 var rootCommand = &cobra.Command{
 	Use:   "wonda",
 	Short: "Watch your characters surprise you",
 	Long:  `Your creative sandbox for character-driven storytelling`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		initLogger(logLevel)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		cmd.Help()
 	},

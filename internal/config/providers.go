@@ -78,7 +78,7 @@ func (p *Provider) LoadFromEnvironment() error {
 //   - Must start with an alphabetic character (a-z, A-Z)
 //   - Can contain alphanumeric characters, dashes, and underscores
 type Providers struct {
-	Version   string              `toml:"version"`   // Configuration version
+	Version   string               `toml:"version"` // Configuration version
 	Providers map[string]*Provider `toml:"providers"`
 }
 

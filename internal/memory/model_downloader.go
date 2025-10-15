@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,9 +24,9 @@ const (
 
 // ModelDownloader handles downloading and caching the ONNX model.
 type ModelDownloader struct {
-	modelURL  string
-	cacheDir  string
-	modelDir  string
+	modelURL     string
+	cacheDir     string
+	modelDir     string
 	showProgress bool
 }
 
@@ -55,8 +56,7 @@ func (d *ModelDownloader) EnsureModelAvailable() (string, error) {
 	}
 
 	// Need to download
-	fmt.Printf("Downloading ONNX embedding model from %s...\n", d.modelURL)
-	fmt.Printf("This is a one-time download (~200MB).\n")
+	slog.Info("downloading ONNX embedding model", "url", d.modelURL, "size", "~200MB")
 
 	if err := d.downloadAndExtract(); err != nil {
 		return "", fmt.Errorf("failed to download model: %w", err)
@@ -67,7 +67,7 @@ func (d *ModelDownloader) EnsureModelAvailable() (string, error) {
 		return "", fmt.Errorf("model download succeeded but files are missing")
 	}
 
-	fmt.Printf("✓ Model downloaded and cached to %s\n", d.modelDir)
+	slog.Info("model downloaded and cached", "path", d.modelDir)
 	return d.modelDir, nil
 }
 
@@ -162,18 +162,20 @@ func (d *ModelDownloader) copyWithProgress(dst io.Writer, src io.Reader, totalBy
 				return io.ErrShortWrite
 			}
 
-			// Print progress
+			// Log progress (every 10%)
 			if totalBytes > 0 {
 				percent := float64(written) / float64(totalBytes) * 100
-				fmt.Printf("\rDownloading: %.1f%% (%d/%d MB)",
-					percent,
-					written/(1024*1024),
-					totalBytes/(1024*1024))
+				// Log every 10% increment
+				if int(percent)%10 == 0 && int(percent) > int(float64(written-int64(nw))/float64(totalBytes)*100) {
+					slog.Info("download progress",
+						"percent", int(percent),
+						"downloaded_mb", written/(1024*1024),
+						"total_mb", totalBytes/(1024*1024))
+				}
 			}
 		}
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println() // newline after progress
 				return nil
 			}
 			return err

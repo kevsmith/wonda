@@ -127,8 +127,9 @@ func extractJSONField(jsonData []byte, fieldPath string) string {
 
 // convertToJSONPath converts dot-notation paths to JSONPath format.
 // Examples:
-//   "choices.0.message.reasoning" -> "$.choices[0].message.reasoning"
-//   "reasoning.content" -> "$.reasoning.content"
+//
+//	"choices.0.message.reasoning" -> "$.choices[0].message.reasoning"
+//	"reasoning.content" -> "$.reasoning.content"
 func convertToJSONPath(path string) string {
 	if !strings.HasPrefix(path, "$") {
 		path = "$." + path

@@ -16,7 +16,8 @@ var FS embed.FS
 // The name should not include the "_prompt.md" suffix - it will be added automatically.
 //
 // Example:
-//   content, err := prompts.GetPrompt("agent_turn")  // reads agent_turn_prompt.md
+//
+//	content, err := prompts.GetPrompt("agent_turn")  // reads agent_turn_prompt.md
 func GetPrompt(name string) (string, error) {
 	filename := name + "_prompt.md"
 	content, err := FS.ReadFile(filename)

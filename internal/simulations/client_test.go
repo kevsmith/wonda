@@ -231,8 +231,8 @@ func TestAnthropicClient_Chat(t *testing.T) {
 						"text": "Hello! I'm Claude. How can I help you?",
 					},
 				},
-				"model":        "claude-3-5-sonnet-20241022",
-				"stop_reason":  "end_turn",
+				"model":         "claude-3-5-sonnet-20241022",
+				"stop_reason":   "end_turn",
 				"stop_sequence": nil,
 				"usage": map[string]interface{}{
 					"input_tokens":  10,
@@ -292,8 +292,8 @@ func TestAnthropicClient_Chat(t *testing.T) {
 						"text": "Based on my analysis, the answer is 42.",
 					},
 				},
-				"model":        "claude-3-5-sonnet-20241022",
-				"stop_reason":  "end_turn",
+				"model":         "claude-3-5-sonnet-20241022",
+				"stop_reason":   "end_turn",
 				"stop_sequence": nil,
 				"usage": map[string]interface{}{
 					"input_tokens":  10,

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"regexp"
@@ -38,8 +39,8 @@ type Simulation struct {
 	MemoryStore *memory.Store
 
 	// Chronicle
-	chroniclePath   string             // Path to chronicle JSONL file
-	chronicleFile   *os.File           // Open file handle for appending
+	chroniclePath     string            // Path to chronicle JSONL file
+	chronicleFile     *os.File          // Open file handle for appending
 	currentTurnEvents []chronicle.Event // Events being collected for current turn
 }
 
@@ -78,7 +79,7 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 	}
 
 	// Initialize memory store with ONNX embeddings (internal implementation)
-	fmt.Printf("Initializing memory store with in-process embeddings...\n")
+	slog.Info("initializing memory store", "type", "in-process embeddings")
 
 	// Use ~/.config/wonda/models for embedding model cache
 	modelsCache := path.Join(s.ConfigDir, "models")
@@ -88,14 +89,14 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 	}
 
 	s.MemoryStore = memory.NewStore(embedder)
-	fmt.Printf("✓ Memory store ready (768-dimensional embeddings)\n")
+	slog.Info("memory store ready", "dimensions", 768)
 
 	// Seed scenario context (shared across all agents)
-	fmt.Printf("Seeding scenario memories...\n")
+	slog.Info("seeding scenario memories")
 	if err := memory.SeedScenario(ctx, s.MemoryStore, s.Scenario); err != nil {
 		return fmt.Errorf("failed to seed scenario: %w", err)
 	}
-	fmt.Printf("✓ Seeded %d scenario memories\n", s.MemoryStore.CountByFilter(memory.Filter{Type: "scene"}))
+	slog.Info("seeded scenario memories", "count", s.MemoryStore.CountByFilter(memory.Filter{Type: "scene"}))
 
 	// Load models configuration
 	modelsDir := path.Join(s.ConfigDir, "models")
@@ -154,7 +155,7 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 		agent.ApplyInitialState(agentConfig.Initial)
 
 		// Seed character memories for this agent
-		fmt.Printf("  Seeding memories for %s...\n", agentName)
+		slog.Debug("seeding agent memories", "agent", agentName)
 		if err := memory.SeedCharacter(ctx, s.MemoryStore, agentName, character); err != nil {
 			return fmt.Errorf("failed to seed character memories for %s: %w", agentName, err)
 		}
@@ -168,12 +169,11 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 		// Register agent in world state
 		s.World.AddAgent(agentName, agent.State.Position)
 
-		fmt.Printf("  ✓ Initialized agent: %s (character: %s, provider: %s, model: %s)\n",
-			agentName, agentConfig.Character, providerName, modelName)
+		slog.Info("agent initialized", "agent", agentName, "character", agentConfig.Character, "provider", providerName, "model", modelName)
 	}
 
 	// Seed knowledge about other characters for each agent
-	fmt.Printf("\nSeeding inter-character knowledge...\n")
+	slog.Info("seeding inter-character knowledge")
 	for agentName := range s.Scenario.Agents {
 		for otherAgentName, otherAgentConfig := range s.Scenario.Agents {
 			if agentName == otherAgentName {
@@ -194,7 +194,7 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 		}
 	}
 
-	fmt.Printf("✓ Memory store initialized with %d total memories\n\n", s.MemoryStore.Count())
+	slog.Info("memory store initialized", "total_memories", s.MemoryStore.Count())
 
 	// Register memory tools with MCP server
 	s.MCPServer.RegisterTool(mcpsim.NewQuerySelfTool(s.MemoryStore))
@@ -316,26 +316,21 @@ func (s *Simulation) Start(ctx context.Context) error {
 	}()
 
 	// Display scenario information
-	fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Printf("     Starting Simulation: %s\n", s.Scenario.Basics.Name)
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
-	fmt.Printf("%s\n", s.Scenario.Basics.Description)
-	fmt.Printf("\nLocation: %s\n", s.Scenario.Basics.Location)
-	fmt.Printf("Time: %s\n", s.Scenario.Basics.TOD)
+	slog.Info("starting simulation", "name", s.Scenario.Basics.Name)
+	slog.Info("scenario", "description", s.Scenario.Basics.Description)
+	slog.Info("setting", "location", s.Scenario.Basics.Location, "time", s.Scenario.Basics.TOD)
 	if s.Scenario.Basics.Atmosphere != "" {
-		fmt.Printf("Atmosphere: %s\n", s.Scenario.Basics.Atmosphere)
+		slog.Info("atmosphere", "value", s.Scenario.Basics.Atmosphere)
 	}
 
-	fmt.Printf("\nAgents:\n")
 	for _, agentName := range s.TurnOrder {
 		agent := s.Agents[agentName]
-		fmt.Printf("  • %s (%s)\n", agentName, agent.Character.Basics.Archetype)
+		slog.Info("agent", "name", agentName, "archetype", agent.Character.Basics.Archetype)
 	}
 
 	// Initialize goals in world state
-	fmt.Printf("\nGoals:\n")
 	for name, goal := range s.Scenario.Goals {
-		fmt.Printf("  • %s: %s\n", name, goal.Description)
+		slog.Info("goal", "name", name, "description", goal.Description)
 
 		// Create interactive goal in world state
 		s.World.Goals[name] = mcpsim.NewInteractiveGoal(
@@ -346,25 +341,21 @@ func (s *Simulation) Start(ctx context.Context) error {
 		)
 	}
 
-	fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-
 	// Multi-turn loop with two phases: deliberation and voting
 	maxTurns := 10
 	for turn := 1; turn <= maxTurns; turn++ {
 		s.World.CurrentTurn = turn
-		fmt.Printf("\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-		fmt.Printf("                      Turn %d\n", turn)
-		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		slog.Info("turn starting", "turn", turn)
 
 		// Phase 1: Deliberation - agents perceive, discuss, and propose solutions
-		fmt.Printf("\n─── Deliberation Phase ───\n")
+		slog.Debug("deliberation phase starting")
 		deliberationTools := s.getDeliberationTools()
 		deliberationSituation := s.buildDeliberationPrompt(turn)
 
 		for _, agentName := range s.TurnOrder {
 			agent := s.Agents[agentName]
 
-			fmt.Printf("\n[%s]\n", agentName)
+			slog.Debug("agent turn starting", "agent", agentName, "phase", "deliberation")
 
 			// Create context with agent name
 			agentCtx := context.WithValue(ctx, runtime.AgentNameKey, agentName)
@@ -380,10 +371,10 @@ func (s *Simulation) Start(ctx context.Context) error {
 
 			// Display response
 			if response.Thinking != "" {
-				fmt.Printf("  🧠 Reasoning: %s\n", response.Thinking)
+				slog.Debug("reasoning", "agent", agentName, "thinking", response.Thinking)
 			}
 			if response.Message != "" {
-				fmt.Printf("  💬 Says: \"%s\"\n", response.Message)
+				slog.Info("dialogue", "agent", agentName, "message", response.Message)
 			}
 
 			// Show any proposals made
@@ -410,45 +401,45 @@ func (s *Simulation) Start(ctx context.Context) error {
 		// Check for automatic consensus (identical proposals)
 		if s.checkAutomaticConsensus(turn) {
 			// Goals completed via automatic consensus, skip voting
-			fmt.Printf("\n✨ Automatic consensus detected! Skipping voting phase.\n")
+			slog.Info("automatic consensus detected, skipping voting phase")
 		} else {
 			// Phase 2: Voting - agents vote on all pending proposals
-			fmt.Printf("\n─── Voting Phase ───\n")
-		votingTools := s.getVotingTools()
-		votingSituation := s.buildVotingPrompt()
+			slog.Debug("voting phase starting")
+			votingTools := s.getVotingTools()
+			votingSituation := s.buildVotingPrompt()
 
-		for _, agentName := range s.TurnOrder {
-			agent := s.Agents[agentName]
+			for _, agentName := range s.TurnOrder {
+				agent := s.Agents[agentName]
 
-			fmt.Printf("\n[%s]\n", agentName)
+				slog.Debug("agent turn starting", "agent", agentName, "phase", "voting")
 
-			// Create context with agent name
-			agentCtx := context.WithValue(ctx, runtime.AgentNameKey, agentName)
+				// Create context with agent name
+				agentCtx := context.WithValue(ctx, runtime.AgentNameKey, agentName)
 
-			// Track votes before
-			votesBefore := s.collectVotes()
+				// Track votes before
+				votesBefore := s.collectVotes()
 
-			// Agent votes on all pending proposals
-			response, err := agent.Think(agentCtx, votingSituation, votingTools, s.MCPServer)
-			if err != nil {
-				return fmt.Errorf("agent %s failed to vote: %w", agentName, err)
+				// Agent votes on all pending proposals
+				response, err := agent.Think(agentCtx, votingSituation, votingTools, s.MCPServer)
+				if err != nil {
+					return fmt.Errorf("agent %s failed to vote: %w", agentName, err)
+				}
+
+				// Display response
+				if response.Thinking != "" {
+					slog.Debug("reasoning", "agent", agentName, "thinking", response.Thinking)
+				}
+				if response.Message != "" {
+					slog.Info("dialogue", "agent", agentName, "message", response.Message)
+				}
+
+				// Show any votes cast
+				votesAfter := s.collectVotes()
+				s.displayNewVotes(agentName, votesBefore, votesAfter)
+
+				// Capture event for chronicle
+				s.captureEvent(agentName, response.Message, response.Thinking)
 			}
-
-			// Display response
-			if response.Thinking != "" {
-				fmt.Printf("  🧠 Reasoning: %s\n", response.Thinking)
-			}
-			if response.Message != "" {
-				fmt.Printf("  💬 Says: \"%s\"\n", response.Message)
-			}
-
-			// Show any votes cast
-			votesAfter := s.collectVotes()
-			s.displayNewVotes(agentName, votesBefore, votesAfter)
-
-			// Capture event for chronicle
-			s.captureEvent(agentName, response.Message, response.Thinking)
-		}
 
 			// Display voting results
 			s.displayVotingResults()
@@ -456,25 +447,19 @@ func (s *Simulation) Start(ctx context.Context) error {
 
 		// Write turn events to chronicle
 		if err := s.writeTurnToChronicle(turn); err != nil {
-			fmt.Printf("Warning: failed to write turn to chronicle: %v\n", err)
+			slog.Warn("failed to write turn to chronicle", "error", err)
 		}
 
 		// Check if all goals are completed
 		if s.allGoalsCompleted() {
-			fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-			fmt.Printf("            All Goals Completed!\n")
-			fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+			slog.Info("all goals completed")
 			break
 		}
 	}
 
 	// Final summary
 	s.printGoalSummary()
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Printf("          Simulation Complete\n")
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Printf("\nTotal turns: %d\n", s.World.CurrentTurn)
-	fmt.Printf("Chronicle saved to: %s\n", s.chroniclePath)
+	slog.Info("simulation complete", "total_turns", s.World.CurrentTurn, "chronicle", s.chroniclePath)
 	return nil
 }
 
@@ -631,7 +616,7 @@ func (s *Simulation) displayNewProposals(agentName string) {
 	for _, goal := range s.World.Goals {
 		for _, proposal := range goal.Proposals {
 			if proposal.ProposedBy == agentName && proposal.ProposedAt == s.World.CurrentTurn {
-				fmt.Printf("  🔨 Proposes: %s\n", proposal.Description)
+				slog.Info("proposal", "agent", agentName, "description", proposal.Description)
 			}
 		}
 	}
@@ -667,11 +652,7 @@ func (s *Simulation) displayNewVotes(agentName string, before, after map[string]
 				// Find the proposal to get its description
 				goal := s.World.Goals[goalName]
 				if proposal, ok := goal.Proposals[proposalID]; ok {
-					voteSymbol := "✗"
-					if voteAfter == "yes" {
-						voteSymbol = "✓"
-					}
-					fmt.Printf("  🔨 Votes %s on: %s\n", voteSymbol, proposal.Description)
+					slog.Info("vote", "agent", agentName, "choice", voteAfter, "proposal", proposal.Description)
 				}
 			}
 		}
@@ -680,17 +661,10 @@ func (s *Simulation) displayNewVotes(agentName string, before, after map[string]
 
 // displayVotingResults shows the outcome of the voting phase.
 func (s *Simulation) displayVotingResults() {
-	hasResults := false
-
 	for _, goal := range s.World.Goals {
 		for _, proposal := range goal.Proposals {
 			// Only show proposals that were resolved this turn
 			if proposal.ResolvedAt == s.World.CurrentTurn {
-				if !hasResults {
-					fmt.Printf("\nResults:\n")
-					hasResults = true
-				}
-
 				yesCount := 0
 				noCount := 0
 				for _, vote := range proposal.Votes {
@@ -703,9 +677,9 @@ func (s *Simulation) displayVotingResults() {
 
 				switch proposal.Status {
 				case mcpsim.ProposalAccepted:
-					fmt.Printf("  ✓ %s - Accepted (%d yes, %d no)\n", proposal.Description, yesCount, noCount)
+					slog.Info("proposal accepted", "description", proposal.Description, "yes", yesCount, "no", noCount)
 				case mcpsim.ProposalRejected:
-					fmt.Printf("  ✗ %s - Rejected (%d yes, %d no)\n", proposal.Description, yesCount, noCount)
+					slog.Info("proposal rejected", "description", proposal.Description, "yes", yesCount, "no", noCount)
 				}
 			}
 		}
@@ -714,34 +688,24 @@ func (s *Simulation) displayVotingResults() {
 
 // printGoalSummary displays a summary of goal completion.
 func (s *Simulation) printGoalSummary() {
-	fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Printf("                 Goal Summary\n")
-	fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n")
+	slog.Info("goal summary")
 
 	for _, goal := range s.World.Goals {
-		statusSymbol := "○"
 		statusText := string(goal.Status)
 
 		switch goal.Status {
 		case mcpsim.GoalCompleted:
-			statusSymbol = "✓"
 			statusText = "COMPLETED"
 		case mcpsim.GoalFailed:
-			statusSymbol = "✗"
 			statusText = "FAILED"
 		}
 
-		fmt.Printf("%s %s: %s\n", statusSymbol, goal.Name, statusText)
+		slog.Info("goal status", "name", goal.Name, "status", statusText)
 
 		if goal.Status == mcpsim.GoalCompleted {
-			fmt.Printf("  Completed at turn: %d\n", goal.CompletedAt)
-
 			// Show accepted proposal
 			for _, proposal := range goal.Proposals {
 				if proposal.Status == mcpsim.ProposalAccepted {
-					fmt.Printf("  Solution: %s\n", proposal.Description)
-					fmt.Printf("  Proposed by: %s\n", proposal.ProposedBy)
-
 					// Show who voted yes
 					voters := []string{}
 					for agentName, vote := range proposal.Votes {
@@ -749,20 +713,15 @@ func (s *Simulation) printGoalSummary() {
 							voters = append(voters, agentName)
 						}
 					}
-					if len(voters) > 0 {
-						fmt.Printf("  Votes: ")
-						for i, voter := range voters {
-							if i > 0 {
-								fmt.Printf(", ")
-							}
-							fmt.Printf("%s (yes)", voter)
-						}
-						fmt.Printf("\n")
-					}
+					slog.Info("goal completed",
+						"goal", goal.Name,
+						"turn", goal.CompletedAt,
+						"solution", proposal.Description,
+						"proposed_by", proposal.ProposedBy,
+						"voters", strings.Join(voters, ", "))
 				}
 			}
 		}
-		fmt.Printf("\n")
 	}
 }
 
@@ -779,7 +738,7 @@ func (s *Simulation) captureEpisodicMemory(ctx context.Context, agentName, conte
 	embedding, err := s.MemoryStore.Embed(ctx, episodicContent)
 	if err != nil {
 		// Log error but don't fail the simulation
-		fmt.Printf("  Warning: failed to embed episodic memory: %v\n", err)
+		slog.Warn("failed to embed episodic memory", "error", err)
 		return
 	}
 
@@ -860,7 +819,7 @@ func (s *Simulation) checkAutomaticConsensus(turn int) bool {
 			// Complete the goal
 			goal.CheckConsensus(turn)
 
-			fmt.Printf("\n  🎯 Goal '%s': All agents proposed \"%s\"\n", goal.Name, firstDescription)
+			slog.Info("automatic consensus", "goal", goal.Name, "proposal", firstDescription)
 			foundConsensus = true
 		}
 	}

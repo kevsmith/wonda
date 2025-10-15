@@ -48,7 +48,6 @@ var listCharactersCommand = &cobra.Command{
 	Run:     listCharacters,
 }
 
-
 func init() {
 	charactersCommand.AddCommand(showCharacterCommand, editCharacterCommand, newCharacterCommand, listCharactersCommand)
 }

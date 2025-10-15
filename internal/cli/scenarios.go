@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path"
 	"strings"
@@ -219,7 +220,7 @@ func runScenario(cmd *cobra.Command, args []string) {
 	sim := simulations.NewSimulation(scenario, configDir)
 
 	// Initialize simulation (load characters, create agents)
-	fmt.Printf("Initializing simulation...\n\n")
+	slog.Info("initializing simulation", "id", sim.ID.String())
 	ctx := context.Background()
 
 	// Set timeout based on scenario max_runtime

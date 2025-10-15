@@ -14,7 +14,8 @@ import (
 //   - "embeddings" - Embeddings configuration template
 //
 // Example:
-//   content, err := config.GetTemplate("scenario")  // reads scenario_template.toml
+//
+//	content, err := config.GetTemplate("scenario")  // reads scenario_template.toml
 func GetTemplate(name string) (string, error) {
 	return templates.GetTemplate(name)
 }

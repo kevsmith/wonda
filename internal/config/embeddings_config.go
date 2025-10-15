@@ -47,7 +47,7 @@ func (e *Embedding) Validate() error {
 // Embeddings represents the top-level embeddings configuration.
 // Note: Embeddings are typically stored in providers.toml alongside providers.
 type Embeddings struct {
-	Version    string                 `toml:"version"`    // Configuration version
+	Version    string                `toml:"version"` // Configuration version
 	Embeddings map[string]*Embedding `toml:"embeddings"`
 }
 

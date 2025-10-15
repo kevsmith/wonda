@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"regexp"
@@ -18,12 +19,12 @@ import (
 
 // OpenAIClient implements the Client interface for OpenAI-compatible APIs.
 type OpenAIClient struct {
-	client   *openai.Client
-	model    *config.Model
-	parser   ResponseParser
-	modelID  string
-	baseURL  string
-	apiKey   string
+	client  *openai.Client
+	model   *config.Model
+	parser  ResponseParser
+	modelID string
+	baseURL string
+	apiKey  string
 }
 
 // newOpenAIClient creates a new OpenAI-compatible client.
@@ -41,12 +42,12 @@ func newOpenAIClient(provider *config.Provider, model *config.Model, parser Resp
 	client := openai.NewClientWithConfig(clientConfig)
 
 	return &OpenAIClient{
-		client:   client,
-		model:    model,
-		parser:   parser,
-		modelID:  model.Name,
-		baseURL:  provider.BaseURL,
-		apiKey:   apiKey,
+		client:  client,
+		model:   model,
+		parser:  parser,
+		modelID: model.Name,
+		baseURL: provider.BaseURL,
+		apiKey:  apiKey,
 	}, nil
 }
 
@@ -152,19 +153,19 @@ func (c *OpenAIClient) chatWithLibrary(ctx context.Context, req ChatRequest) (Ch
 
 			// Debug logging
 			if thinking == "" {
-				fmt.Printf("[DEBUG] Failed to extract reasoning from field path: %s\n", fieldPath)
+				slog.Debug("failed to extract reasoning from field path", "field_path", fieldPath)
 				// Write full response to file for inspection
 				if err := os.WriteFile("/tmp/wonda-llm-response.json", jsonData, 0644); err == nil {
-					fmt.Printf("[DEBUG] Full response written to: /tmp/wonda-llm-response.json\n")
+					slog.Debug("full response written to file", "path", "/tmp/wonda-llm-response.json")
 				}
-				// Print first 1000 chars of response for quick debugging
+				// Log first 1000 chars of response for quick debugging
+				preview := string(jsonData)
 				if len(jsonData) > 1000 {
-					fmt.Printf("[DEBUG] Response preview: %s...\n", string(jsonData[:1000]))
-				} else {
-					fmt.Printf("[DEBUG] Full response: %s\n", string(jsonData))
+					preview = string(jsonData[:1000]) + "..."
 				}
+				slog.Debug("response preview", "data", preview)
 			} else {
-				fmt.Printf("[DEBUG] Successfully extracted reasoning (%d chars)\n", len(thinking))
+				slog.Debug("successfully extracted reasoning", "length", len(thinking))
 			}
 		}
 	} else {
@@ -302,7 +303,7 @@ func (c *OpenAIClient) chatRaw(ctx context.Context, req ChatRequest) (ChatRespon
 
 		// Show thinking activity
 		if thinking != "" {
-			fmt.Printf("  🧠 %d chars\n", len(thinking))
+			slog.Debug("thinking extracted", "length", len(thinking))
 		}
 	}
 
@@ -323,12 +324,12 @@ func cleanModelArtifacts(text string) string {
 
 	// Remove special tokens
 	patterns := []string{
-		`<\|start\|>[^<]*to=[^\s<]+`,       // <|start|>...to=assistant
-		`<\|call\|>`,                        // <|call|>
-		`<\|message\|>`,                     // <|message|>
-		`<\|channel\|>[^<]*`,                // <|channel|>...
-		`<\|constrain\|>[^\s<]+`,            // <|constrain|>json
-		`<\|end\|>`,                         // <|end|>
+		`<\|start\|>[^<]*to=[^\s<]+`,         // <|start|>...to=assistant
+		`<\|call\|>`,                         // <|call|>
+		`<\|message\|>`,                      // <|message|>
+		`<\|channel\|>[^<]*`,                 // <|channel|>...
+		`<\|constrain\|>[^\s<]+`,             // <|constrain|>json
+		`<\|end\|>`,                          // <|end|>
 		`Tool '[^']+' returned:\s*\{[^}]*\}`, // Tool execution traces
 	}
 

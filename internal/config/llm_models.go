@@ -35,9 +35,9 @@ type ThinkingParserConfig struct {
 
 // Model represents a language model configuration.
 type Model struct {
-	Version      string  `toml:"version"`       // Configuration version
-	Name         string  `toml:"name"`          // API model identifier (e.g., "claude-3-5-sonnet-20241022")
-	Provider     string  `toml:"provider"`      // Reference to provider name from providers.toml
+	Version        string                `toml:"version"`                   // Configuration version
+	Name           string                `toml:"name"`                      // API model identifier (e.g., "claude-3-5-sonnet-20241022")
+	Provider       string                `toml:"provider"`                  // Reference to provider name from providers.toml
 	ThinkingParser *ThinkingParserConfig `toml:"thinking_parser,omitempty"` // Optional: auto-detected if nil
 }
 

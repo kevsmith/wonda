@@ -3,8 +3,10 @@ package memory
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	"github.com/daulet/tokenizers"
@@ -61,6 +63,17 @@ func NewONNXEmbedder(modelDir string) (*ONNXEmbedder, error) {
 
 	// Initialize ONNX Runtime (once per process)
 	onnxInitOnce.Do(func() {
+		// Set the library path based on platform
+		var libPath string
+		switch runtime.GOOS {
+		case "windows":
+			libPath = "lib/onnxruntime.dll"
+		case "darwin":
+			libPath = "lib/libonnxruntime.dylib"
+		default: // linux and others
+			libPath = "lib/libonnxruntime.so.1.22.0"
+		}
+		ort.SetSharedLibraryPath(libPath)
 		onnxInitErr = ort.InitializeEnvironment()
 	})
 	if onnxInitErr != nil {
@@ -73,8 +86,40 @@ func NewONNXEmbedder(modelDir string) (*ONNXEmbedder, error) {
 		return nil, fmt.Errorf("failed to create session options: %w", err)
 	}
 
-	// Set to use CPU execution provider (can add GPU later)
-	// options.AppendExecutionProviderCUDA(0) // For GPU support
+	// Configure execution providers (order matters - first available is used)
+	acceleratorUsed := false
+
+	switch runtime.GOOS {
+	case "darwin":
+		// Try CoreML for Apple Silicon/Neural Engine acceleration
+		if err := options.AppendExecutionProviderCoreML(0); err != nil {
+			log.Printf("CoreML not available, falling back to CPU: %v", err)
+		} else {
+			log.Printf("Using CoreML execution provider for hardware acceleration")
+			acceleratorUsed = true
+		}
+
+	case "linux", "windows":
+		// Try CUDA for NVIDIA GPU acceleration
+		cudaOptions, err := ort.NewCUDAProviderOptions()
+		if err != nil {
+			log.Printf("CUDA not available, falling back to CPU: %v", err)
+		} else {
+			if err := options.AppendExecutionProviderCUDA(cudaOptions); err != nil {
+				log.Printf("CUDA not available, falling back to CPU: %v", err)
+				cudaOptions.Destroy()
+			} else {
+				log.Printf("Using CUDA execution provider for GPU acceleration")
+				acceleratorUsed = true
+				// Note: cudaOptions will be destroyed when SessionOptions is destroyed
+			}
+		}
+	}
+
+	if !acceleratorUsed {
+		log.Printf("Using CPU execution provider")
+	}
+	// CPU is always available as fallback (automatically added by ONNX Runtime)
 
 	return &ONNXEmbedder{
 		tokenizer:      tok,

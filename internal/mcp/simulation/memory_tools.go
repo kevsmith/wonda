@@ -290,7 +290,7 @@ func NewQueryMemoryTool(store *memory.Store) *mcp.Tool {
 			}
 
 			return map[string]interface{}{
-				"query":   query,
+				"query":    query,
 				"memories": memories,
 			}, nil
 		},
