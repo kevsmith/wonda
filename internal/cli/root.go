@@ -42,7 +42,7 @@ var rootCommand = &cobra.Command{
 	Short: "Watch your characters surprise you",
 	Long:  `Your creative sandbox for character-driven storytelling`,
 	Run: func(cmd *cobra.Command, args []string) {
-
+		cmd.Help()
 	},
 }
 
