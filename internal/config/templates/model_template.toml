@@ -16,4 +16,4 @@ provider = ""
 # end_delimiter = "</think>"
 
 # For out_of_band parsers:
-# field_path = "thinking"
+# field_path = "choices.0.reasoning"

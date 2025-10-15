@@ -6,10 +6,9 @@ import (
 )
 
 // FS contains all template files embedded at build time.
-// Only files ending in _template.toml are embedded to avoid accidentally
-// packaging other TOML files.
+// All .toml files are embedded, including templates and starter configs.
 //
-//go:embed *_template.toml
+//go:embed *.toml
 var FS embed.FS
 
 // GetTemplate retrieves a template by name.

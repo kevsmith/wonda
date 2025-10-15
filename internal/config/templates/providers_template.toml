@@ -1,0 +1,27 @@
+version = "1.0.0"
+
+# Wonda Providers Configuration
+# API Key Environment Variables:
+# If api_key is not specified, Wonda looks for <PROVIDER_NAME>_API_KEY
+# where <PROVIDER_NAME> is transformed from the provider name using:
+#   1. Convert to uppercase
+#   2. Replace dashes (-) with underscores (_)
+#   3. Replace spaces with underscores (_)
+#
+# Examples:
+#   [providers.anthropic] → ANTHROPIC_API_KEY
+#   [providers.ollama-local] → OLLAMA_LOCAL_API_KEY
+#   [providers."my provider"] → MY_PROVIDER_API_KEY
+#
+# Provider Naming Requirements:
+#   - Must start with an alphabetic character (a-z, A-Z)
+#   - Can contain alphanumeric characters, dashes, and underscores
+
+# Example: Anthropic provider
+# [providers.anthropic]
+# base_url = "https://api.anthropic.com"
+# # api_key = "sk-ant-..."  # Or set ANTHROPIC_API_KEY environment variable
+
+# Example: Local Ollama provider
+# [providers.ollama]
+# base_url = "http://localhost:11434"
