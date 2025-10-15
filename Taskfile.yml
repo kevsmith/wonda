@@ -1,0 +1,158 @@
+version: '3'
+
+vars:
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo "unknown"
+  BUILD_TIME:
+    sh: date -u +"%Y-%m-%dT%H:%M:%SZ"
+  BUILD_DIR: dist
+  BINARY_NAME: wonda
+  LDFLAGS: -X github.com/poiesic/wonda/internal/version.Version={{.VERSION}} -X github.com/poiesic/wonda/internal/version.Commit={{.COMMIT}} -X github.com/poiesic/wonda/internal/version.BuildTime={{.BUILD_TIME}}
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+
+  download-libs-linux:
+    desc: Download Linux runtime libraries
+    status:
+      - test -f lib/libonnxruntime.so.1.22.0
+      - test -f lib/libonnxruntime_providers_shared.so
+      - test -f lib/libtokenizers.a
+    cmds:
+      - mkdir -p lib
+      - curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz | tar -xz --strip-components=2 -C lib onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0 onnxruntime-linux-x64-1.22.0/lib/libonnxruntime_providers_shared.so
+      - curl -sL https://github.com/daulet/tokenizers/releases/download/v1.23.0/libtokenizers.linux-amd64.tar.gz | tar -xz -C lib
+
+  build-linux-amd64:
+    desc: Build Linux AMD64 release package
+    deps: [download-libs-linux]
+    vars:
+      PLATFORM: linux-amd64
+      GOOS: linux
+      GOARCH: amd64
+      OUTPUT_DIR: "{{.BUILD_DIR}}/{{.BINARY_NAME}}-{{.PLATFORM}}"
+    cmds:
+      - mkdir -p {{.OUTPUT_DIR}}/lib
+      - GOOS={{.GOOS}} GOARCH={{.GOARCH}} CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib" go build -ldflags "{{.LDFLAGS}}" -o {{.OUTPUT_DIR}}/{{.BINARY_NAME}} cmd/main.go
+      - cp lib/libonnxruntime.so.1.22.0 {{.OUTPUT_DIR}}/lib/
+      - cp lib/libonnxruntime_providers_shared.so {{.OUTPUT_DIR}}/lib/
+      - cp lib/libtokenizers.a {{.OUTPUT_DIR}}/lib/
+      - cd {{.BUILD_DIR}} && tar -czf {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.tar.gz {{.BINARY_NAME}}-{{.PLATFORM}}
+
+  download-libs-darwin-amd64:
+    desc: Download macOS AMD64 runtime libraries
+    status:
+      - test -f lib/darwin-amd64/libonnxruntime.dylib
+      - test -f lib/darwin-amd64/libonnxruntime_providers_shared.dylib
+      - test -f lib/darwin-amd64/libtokenizers.a
+    cmds:
+      - mkdir -p lib/darwin-amd64
+      - curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-x86_64-1.22.0.tgz | tar -xz -C lib/darwin-amd64 --strip-components=1 onnxruntime-osx-x86_64-1.22.0/lib/libonnxruntime.1.22.0.dylib onnxruntime-osx-x86_64-1.22.0/lib/libonnxruntime_providers_shared.dylib
+      - mv lib/darwin-amd64/libonnxruntime.1.22.0.dylib lib/darwin-amd64/libonnxruntime.dylib
+      - curl -sL https://github.com/daulet/tokenizers/releases/download/v1.23.0/libtokenizers.darwin-amd64.tar.gz | tar -xz -C lib/darwin-amd64
+
+  build-darwin-amd64:
+    desc: Build macOS AMD64 release package
+    deps: [download-libs-darwin-amd64]
+    vars:
+      PLATFORM: darwin-amd64
+      GOOS: darwin
+      GOARCH: amd64
+      OUTPUT_DIR: "{{.BUILD_DIR}}/{{.BINARY_NAME}}-{{.PLATFORM}}"
+    cmds:
+      - mkdir -p {{.OUTPUT_DIR}}/lib
+      - GOOS={{.GOOS}} GOARCH={{.GOARCH}} CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib/darwin-amd64" go build -ldflags "{{.LDFLAGS}}" -o {{.OUTPUT_DIR}}/{{.BINARY_NAME}} cmd/main.go
+      - cp lib/darwin-amd64/*.dylib lib/darwin-amd64/*.a {{.OUTPUT_DIR}}/lib/
+      - cd {{.BUILD_DIR}} && zip -q -r {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.zip {{.BINARY_NAME}}-{{.PLATFORM}}
+
+  download-libs-darwin-arm64:
+    desc: Download macOS ARM64 runtime libraries
+    status:
+      - test -f lib/darwin-arm64/libonnxruntime.dylib
+      - test -f lib/darwin-arm64/libonnxruntime_providers_shared.dylib
+      - test -f lib/darwin-arm64/libtokenizers.a
+    cmds:
+      - mkdir -p lib/darwin-arm64
+      - curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-osx-arm64-1.22.0.tgz | tar -xz -C lib/darwin-arm64 --strip-components=1 onnxruntime-osx-arm64-1.22.0/lib/libonnxruntime.1.22.0.dylib onnxruntime-osx-arm64-1.22.0/lib/libonnxruntime_providers_shared.dylib
+      - mv lib/darwin-arm64/libonnxruntime.1.22.0.dylib lib/darwin-arm64/libonnxruntime.dylib
+      - curl -sL https://github.com/daulet/tokenizers/releases/download/v1.23.0/libtokenizers.darwin-arm64.tar.gz | tar -xz -C lib/darwin-arm64
+
+  build-darwin-arm64:
+    desc: Build macOS ARM64 (Apple Silicon) release package
+    deps: [download-libs-darwin-arm64]
+    vars:
+      PLATFORM: darwin-arm64
+      GOOS: darwin
+      GOARCH: arm64
+      OUTPUT_DIR: "{{.BUILD_DIR}}/{{.BINARY_NAME}}-{{.PLATFORM}}"
+    cmds:
+      - mkdir -p {{.OUTPUT_DIR}}/lib
+      - GOOS={{.GOOS}} GOARCH={{.GOARCH}} CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib/darwin-arm64" go build -ldflags "{{.LDFLAGS}}" -o {{.OUTPUT_DIR}}/{{.BINARY_NAME}} cmd/main.go
+      - cp lib/darwin-arm64/*.dylib lib/darwin-arm64/*.a {{.OUTPUT_DIR}}/lib/
+      - cd {{.BUILD_DIR}} && zip -q -r {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.zip {{.BINARY_NAME}}-{{.PLATFORM}}
+
+  download-libs-windows:
+    desc: Download Windows runtime libraries
+    status:
+      - test -f lib/windows-amd64/onnxruntime.dll
+      - test -f lib/windows-amd64/onnxruntime_providers_shared.dll
+      - test -f lib/windows-amd64/tokenizers.lib
+    cmds:
+      - mkdir -p lib/windows-amd64
+      - curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-win-x64-1.22.0.zip -o /tmp/onnx-win.zip
+      - unzip -q -j /tmp/onnx-win.zip "onnxruntime-win-x64-1.22.0/lib/*.dll" -d lib/windows-amd64
+      - rm /tmp/onnx-win.zip
+      - curl -sL https://github.com/daulet/tokenizers/releases/download/v1.23.0/tokenizers.windows-amd64.zip -o /tmp/tokenizers-win.zip
+      - unzip -q /tmp/tokenizers-win.zip -d lib/windows-amd64
+      - rm /tmp/tokenizers-win.zip
+
+  build-windows-amd64:
+    desc: Build Windows AMD64 release package
+    deps: [download-libs-windows]
+    vars:
+      PLATFORM: windows-amd64
+      GOOS: windows
+      GOARCH: amd64
+      OUTPUT_DIR: "{{.BUILD_DIR}}/{{.BINARY_NAME}}-{{.PLATFORM}}"
+    cmds:
+      - mkdir -p {{.OUTPUT_DIR}}/lib
+      - GOOS={{.GOOS}} GOARCH={{.GOARCH}} CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib/windows-amd64" go build -ldflags "{{.LDFLAGS}}" -o {{.OUTPUT_DIR}}/{{.BINARY_NAME}}.exe cmd/main.go
+      - cp lib/windows-amd64/*.dll lib/windows-amd64/*.lib {{.OUTPUT_DIR}}/lib/
+      - cd {{.BUILD_DIR}} && zip -q -r {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.zip {{.BINARY_NAME}}-{{.PLATFORM}}
+
+  build-all:
+    desc: Build release packages for all platforms
+    cmds:
+      - task: build-linux-amd64
+      - task: build-darwin-amd64
+      - task: build-darwin-arm64
+      - task: build-windows-amd64
+
+  build-current:
+    desc: Build for current platform only (development)
+    deps: [download-libs-linux]
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}/dev
+      - CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib" go build -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/dev/{{.BINARY_NAME}} cmd/main.go
+
+  checksums:
+    desc: Generate SHA256 checksums for all release artifacts
+    cmds:
+      - cd {{.BUILD_DIR}} && sha256sum *.tar.gz *.zip > checksums.txt 2>/dev/null || true
+
+  release:
+    desc: Build all platforms and generate checksums
+    cmds:
+      - task: clean
+      - task: build-all
+      - task: checksums

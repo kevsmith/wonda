@@ -9,10 +9,12 @@ import (
 
 // Embedding represents a single embedding model configuration.
 type Embedding struct {
-	Name       string `toml:"-"`       // Set from map key
-	Provider   string `toml:"provider"` // References a provider name from [providers.*]
+	Name       string `toml:"-"`        // Set from map key
+	Type       string `toml:"type"`     // "http" (default) or "onnx"
+	Provider   string `toml:"provider"` // References a provider name from [providers.*] (for http type)
 	Model      string `toml:"model"`
 	Dimensions int    `toml:"dimensions"`
+	ModelURL   string `toml:"model_url,omitempty"` // Custom download URL (for onnx type)
 }
 
 // Validate checks if the embedding configuration is valid.

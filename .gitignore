@@ -23,3 +23,19 @@ wonda
 
 # Chronicle files
 chronicle*.jsonl
+
+# ONNX models (downloaded at runtime)
+gtr-t5-base-onnx/
+*.onnx
+
+# Python virtual environments
+scripts/venv/
+venv/
+__pycache__/
+*.pyc
+
+# Spike/test artifacts
+cmd/test_*/
+
+# Runtime libraries (download via task setup-libs or from releases)
+lib/

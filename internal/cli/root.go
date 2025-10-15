@@ -17,7 +17,7 @@ func init() {
 
 	flagDescription := fmt.Sprintf("Path to Wonda configuration (source: %s)", source)
 	rootCommand.PersistentFlags().StringVarP(&configDir, "config-dir", "c", defaultConfig, flagDescription)
-	rootCommand.AddCommand(initCommand, nukeCommand, providersCommand, embeddingsCommand, modelsCommand, charactersCommand, scenariosCommand)
+	rootCommand.AddCommand(initCommand, nukeCommand, providersCommand, embeddingsCommand, modelsCommand, charactersCommand, scenariosCommand, versionCommand)
 }
 
 // getDefaultConfigDirWithSource returns the default configuration directory

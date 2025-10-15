@@ -77,47 +77,18 @@ func (s *Simulation) Initialize(ctx context.Context) error {
 		return fmt.Errorf("failed to load providers: %w", err)
 	}
 
-	// Load embeddings configuration
-	embeddings, err := config.LoadEmbeddingsFromFile(providersPath)
+	// Initialize memory store with ONNX embeddings (internal implementation)
+	fmt.Printf("Initializing memory store with in-process embeddings...\n")
+
+	// Use ~/.config/wonda/models for embedding model cache
+	modelsCache := path.Join(s.ConfigDir, "models")
+	embedder, err := memory.NewONNXEmbedderWithDownload(modelsCache, "")
 	if err != nil {
-		return fmt.Errorf("failed to load embeddings: %w", err)
+		return fmt.Errorf("failed to initialize embeddings: %w", err)
 	}
 
-	// Determine which embedding to use (from scenario defaults)
-	if s.Scenario.Basics.Defaults == nil || s.Scenario.Basics.Defaults.Embedding == "" {
-		return fmt.Errorf("no embedding configured in scenario defaults")
-	}
-
-	embeddingName := s.Scenario.Basics.Defaults.Embedding
-	embedding, err := embeddings.Get(embeddingName)
-	if err != nil {
-		return fmt.Errorf("failed to get embedding '%s': %w", embeddingName, err)
-	}
-
-	// Get the provider for this embedding
-	embeddingProvider, ok := providers.Providers[embedding.Provider]
-	if !ok {
-		return fmt.Errorf("embedding provider '%s' not found for embedding '%s'", embedding.Provider, embeddingName)
-	}
-
-	fmt.Printf("Validating embedding model availability (%s via %s)...\n", embedding.Model, embedding.Provider)
-	if err := config.ValidateEmbeddingModel(embeddingProvider); err != nil {
-		return fmt.Errorf(`embedding model validation failed: %w
-
-The simulation requires %s for memory operations.
-
-To fix:
-  1. Ensure %s is running
-  2. Pull the model: %s pull %s
-  3. Retry the simulation
-`, err, embedding.Model, embedding.Provider, embedding.Provider, embedding.Model)
-	}
-	fmt.Printf("✓ Embedding model validated\n\n")
-
-	// Initialize memory store
-	fmt.Printf("Initializing memory store...\n")
-	embedder := memory.NewOllamaEmbedder(embeddingProvider)
 	s.MemoryStore = memory.NewStore(embedder)
+	fmt.Printf("✓ Memory store ready (768-dimensional embeddings)\n")
 
 	// Seed scenario context (shared across all agents)
 	fmt.Printf("Seeding scenario memories...\n")

@@ -56,8 +56,7 @@ type InitialState struct {
 }
 
 type ScenarioDefaults struct {
-	Model     string `toml:"model"`     // References a model name from models/*.toml (which knows its provider)
-	Embedding string `toml:"embedding"` // References an embedding name from [embeddings.*]
+	Model string `toml:"model"` // References a model name from models/*.toml (which knows its provider)
 }
 
 type Agent struct {

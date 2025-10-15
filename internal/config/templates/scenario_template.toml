@@ -22,7 +22,6 @@ atmosphere = ""
 # Optional: Default LLM configuration for all agents
 [scenario.defaults]
 model = ""
-embedding = ""
 
 # Goals (minimum 1 required)
 # Example:
