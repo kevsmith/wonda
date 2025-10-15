@@ -1,12 +1,14 @@
 package simulations
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"path"
 	"regexp"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -15,6 +17,7 @@ import (
 	"github.com/poiesic/wonda/internal/mcp"
 	mcpsim "github.com/poiesic/wonda/internal/mcp/simulation"
 	"github.com/poiesic/wonda/internal/memory"
+	"github.com/poiesic/wonda/internal/prompts"
 	"github.com/poiesic/wonda/internal/runtime"
 	"github.com/poiesic/wonda/internal/scenarios"
 )
@@ -559,39 +562,27 @@ func (s *Simulation) getVotingTools() []map[string]interface{} {
 }
 
 // buildDeliberationPrompt creates the prompt for deliberation phase.
+// Prompts are loaded from the prompts package.
 func (s *Simulation) buildDeliberationPrompt(turn int) string {
+	var promptName string
 	if turn == 1 {
-		return `DELIBERATION PHASE (Turn 1):
-
-FIRST, discover your identity (required on first turn):
-1. Use query_self() to learn who you are
-2. Use query_scene() to understand where you are
-3. Use query_character(name) to learn about other agents present
-
-THEN, work on the goals:
-4. Use list_goals() to see what goals exist
-5. Use perceive() to see the current situation
-6. Use speak() to discuss with other agents
-7. Use propose_solution() to suggest ONE specific solution (not a list of options)
-
-IMPORTANT: Each proposal must be ONE single, concrete choice. Don't propose multiple alternatives - pick ONE.
-
-DO NOT VOTE YET - voting happens in the next phase.`
+		promptName = "deliberation_turn1"
+	} else {
+		promptName = "deliberation_other"
 	}
-	return `DELIBERATION PHASE:
 
-1. Use query_memory() to recall what happened previously
-2. Use perceive() to see what others just said
-3. Use view_goal() to check existing proposals
-4. Use speak() to discuss further
-5. Use propose_solution() to suggest ONE specific solution (not multiple options)
+	// Get prompt template
+	prompt, err := prompts.GetPrompt(promptName)
+	if err != nil {
+		// Fallback to a simple message if file can't be read
+		return fmt.Sprintf("DELIBERATION PHASE (Turn %d): Use available tools to work on goals.", turn)
+	}
 
-IMPORTANT: Each proposal = ONE choice. If you want to suggest alternatives, make separate proposals.
-
-DO NOT VOTE YET - voting is in the next phase.`
+	return prompt
 }
 
 // buildVotingPrompt creates the prompt for voting phase.
+// The prompt template is loaded from the prompts package.
 func (s *Simulation) buildVotingPrompt() string {
 	// Build a list of all pending proposals across all goals
 	proposalList := ""
@@ -616,17 +607,33 @@ func (s *Simulation) buildVotingPrompt() string {
 		return "VOTING PHASE: No pending proposals to vote on. Just acknowledge and wait for next round."
 	}
 
-	return fmt.Sprintf(`VOTING PHASE: Now you must vote on proposals.%s
+	// Get prompt template
+	promptTemplate, err := prompts.GetPrompt("voting")
+	if err != nil {
+		// Fallback to simple format if template can't be read
+		return fmt.Sprintf("VOTING PHASE: Now you must vote on proposals.%s", proposalList)
+	}
 
-INSTRUCTIONS:
-1. Use view_goal("goal_name") to see all PENDING proposals with their IDs and votes
-2. For EACH pending proposal that YOU DID NOT PROPOSE, call vote_on_proposal("goal_name", "proposal_id", "yes" or "no") ONCE
-3. Vote based on YOUR character values and preferences
-4. SKIP proposals you made - you already auto-voted yes on those when you proposed them
-5. If you get an error saying a proposal is "rejected" or "accepted", STOP trying to vote on it - it's already resolved
-6. Once you've voted on all relevant proposals, you're done - just say "Voting complete"
+	// Parse template and execute with proposal list
+	tmpl, err := template.New("voting").Parse(promptTemplate)
+	if err != nil {
+		// Fallback to simple format if template parsing fails
+		return fmt.Sprintf("VOTING PHASE: Now you must vote on proposals.%s", proposalList)
+	}
 
-Remember: You automatically voted yes on any proposals you made. Only vote on OTHER agents' proposals.`, proposalList)
+	data := struct {
+		ProposalList string
+	}{
+		ProposalList: proposalList,
+	}
+
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		// Fallback to simple format if template execution fails
+		return fmt.Sprintf("VOTING PHASE: Now you must vote on proposals.%s", proposalList)
+	}
+
+	return buf.String()
 }
 
 // allGoalsCompleted checks if all goals have been completed.

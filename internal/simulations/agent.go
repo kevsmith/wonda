@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"github.com/poiesic/wonda/internal/mcp"
+	"github.com/poiesic/wonda/internal/prompts"
 	"github.com/poiesic/wonda/internal/scenarios"
 )
 
@@ -170,30 +171,16 @@ func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]
 	}, fmt.Errorf("maximum tool execution iterations (%d) reached", maxIterations)
 }
 
-// Prompt template for agent turns - minimal, relies on memory queries
-const agentTurnTemplate = `You are {{.Name}}, an agent in a simulation. You have access to memory tools to discover who you are and your situation.
-
-MEMORY TOOLS (use these to understand yourself):
-- query_self(): Discover your core identity and personality
-- query_background(): Learn about your personal history
-- query_communication_style(): Understand how you communicate
-- query_scene(): Learn where you are and the current atmosphere
-- query_character(name): Learn about other agents
-- query_memory(question): Recall what has happened
-
-CURRENT PHYSICAL STATE:
-Location: {{.State.Position}}
-Condition: {{.State.Condition}}/100
-Emotion: {{.State.Emotion}} (intensity {{.State.EmotionIntensity}}/10)
-
-SITUATION:
-{{.Situation}}
-
-First, use the memory tools to understand who you are and your situation. Then act according to your character. Be authentic - let your personality emerge through how you use the tools and what you choose to remember.`
-
 // buildPrompt creates the full prompt using the template system.
+// The prompt template is loaded from the prompts package.
 func (a *Agent) buildPrompt(situation string) (string, error) {
-	tmpl, err := template.New("agent_turn").Parse(agentTurnTemplate)
+	// Get prompt template
+	promptTemplate, err := prompts.GetPrompt("agent_turn")
+	if err != nil {
+		return "", fmt.Errorf("failed to load agent turn prompt: %w", err)
+	}
+
+	tmpl, err := template.New("agent_turn").Parse(promptTemplate)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)
 	}
