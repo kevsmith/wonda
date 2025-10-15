@@ -13,10 +13,11 @@ import (
 )
 
 var runCommand = &cobra.Command{
-	Use:   "run <scenario-name>",
-	Short: "Run a simulation from a scenario definition",
-	Args:  cobra.ExactArgs(1),
-	Run:   runSimulation,
+	Use:     "run <scenario-name>",
+	Aliases: []string{"r"},
+	Short:   "Run a simulation from a scenario definition",
+	Args:    cobra.ExactArgs(1),
+	Run:     runSimulation,
 }
 
 func init() {
