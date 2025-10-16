@@ -1,16 +1,18 @@
 DELIBERATION PHASE (Turn 1):
 
-FIRST, discover your identity (required on first turn):
-1. Use query_self() to learn who you are
-2. Use query_scene() to understand where you are
-3. Use query_character(name) to learn about other agents present
+This is YOUR turn in the conversation. Use your tools to take action now. Examples:
+- Say something to the others - discuss options, share your thoughts, ask questions, react
+- Make a proposal if you have an idea
+- Do something physical if it makes sense (order a drink, gesture, etc.)
 
-THEN, work on the goals:
-4. Use list_goals() to see what goals exist
-5. Use perceive() to see the current situation
-6. Use speak() to discuss with other agents
-7. Use propose_solution() to suggest ONE specific solution (not a list of options)
+Do NOT just narrate what you're thinking or planning. Actually DO something using the available tools.
 
-IMPORTANT: Each proposal must be ONE single, concrete choice. Don't propose multiple alternatives - pick ONE.
+STAY IN CHARACTER - DON'T BREAK THE FOURTH WALL:
+- You're IN this scene having a real conversation - not playing a game
+- Never say things like "we have a goal", "need to propose", "we need to vote", "I'll use this tool"
+- Don't narrate game mechanics - just speak naturally as your character would
+- When proposing, include what you SAY as you propose it
 
-DO NOT VOTE YET - voting happens in the next phase.
+Each suggestion should be ONE specific plan, not multiple options.
+
+This is just discussion - no decisions are final yet.

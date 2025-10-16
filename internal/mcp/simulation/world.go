@@ -20,6 +20,10 @@ type WorldState struct {
 
 	// CurrentTurn tracks which turn we're on
 	CurrentTurn int
+
+	// PendingDialogue buffers dialogue from tool calls (vote comments, proposal comments)
+	// This is cleared after each agent's turn
+	PendingDialogue []ConversationMessage
 }
 
 // AgentInWorld represents an agent's presence in the world.
@@ -29,11 +33,21 @@ type AgentInWorld struct {
 	Visible  bool   // Can this agent be perceived by others?
 }
 
+// MessageType represents the type of message in the conversation.
+type MessageType string
+
+const (
+	MessageTypeDialogue  MessageType = "dialogue"
+	MessageTypeAction    MessageType = "action"
+	MessageTypeMonologue MessageType = "monologue"
+)
+
 // ConversationMessage represents a message in the conversation history.
 type ConversationMessage struct {
 	AgentName string
 	Content   string
 	Thinking  string
+	Type      MessageType
 }
 
 // NewWorldState creates a new world state.
@@ -58,12 +72,30 @@ func (w *WorldState) AddAgent(name, position string) {
 }
 
 // AddMessage records a message in the conversation history.
-func (w *WorldState) AddMessage(agentName, content, thinking string) {
+func (w *WorldState) AddMessage(agentName, content, thinking string, msgType MessageType) {
 	w.ConversationHistory = append(w.ConversationHistory, ConversationMessage{
 		AgentName: agentName,
 		Content:   content,
 		Thinking:  thinking,
+		Type:      msgType,
 	})
+}
+
+// AddPendingDialogue adds dialogue from a tool call (e.g., vote comment, proposal comment).
+// This will be captured by the simulation and cleared after the agent's turn.
+func (w *WorldState) AddPendingDialogue(agentName, content string, msgType MessageType) {
+	w.PendingDialogue = append(w.PendingDialogue, ConversationMessage{
+		AgentName: agentName,
+		Content:   content,
+		Thinking:  "",
+		Type:      msgType,
+	})
+}
+
+// ClearPendingDialogue clears the pending dialogue buffer.
+// Called by the simulation after capturing dialogue events.
+func (w *WorldState) ClearPendingDialogue() {
+	w.PendingDialogue = nil
 }
 
 // GetNearbyAgents returns all agents at the same position as the querying agent.

@@ -20,14 +20,16 @@ type Metadata struct {
 
 // Turn represents all events that occurred in a single turn.
 type Turn struct {
-	Type   string  `json:"type"` // Always "turn"
-	Number int     `json:"number"`
-	Events []Event `json:"events"`
+	Type            string           `json:"type"` // Always "turn"
+	Number          int              `json:"number"`
+	Events          []Event          `json:"events"`
+	GoalCompletions []GoalCompletion `json:"goal_completions,omitempty"` // Goals completed this turn
 }
 
 // Event captures what one agent did during a turn.
 type Event struct {
 	AgentName string        `json:"agent_name"`
+	Type      string        `json:"type,omitempty"`      // dialogue, action, monologue
 	Dialogue  string        `json:"dialogue,omitempty"`  // What they said
 	Reasoning string        `json:"reasoning,omitempty"` // LLM thinking
 	Emotion   *AgentEmotion `json:"emotion,omitempty"`   // Emotional state change
@@ -51,6 +53,17 @@ type EmotionState struct {
 type Vote struct {
 	ProposalID string `json:"proposal_id"`
 	Choice     string `json:"choice"` // yes, no
+}
+
+// GoalCompletion represents a goal that was completed this turn.
+type GoalCompletion struct {
+	GoalName    string   `json:"goal_name"`
+	Status      string   `json:"status"`      // completed, failed
+	Solution    string   `json:"solution"`    // The accepted proposal
+	ProposedBy  string   `json:"proposed_by"` // Who proposed the solution
+	VotedYes    []string `json:"voted_yes"`   // Agents who voted yes
+	VotedNo     []string `json:"voted_no"`    // Agents who voted no
+	CompletedAt int      `json:"completed_at"` // Turn number
 }
 
 // NewMetadata creates a metadata record for the chronicle.

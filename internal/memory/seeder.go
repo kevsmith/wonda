@@ -9,45 +9,19 @@ import (
 )
 
 // SeedCharacter pre-seeds the memory store with character knowledge.
-// Stores content under multiple canonical queries for reliable retrieval.
+// Only seeds information NOT in the system prompt (background, unique_skills).
+// Core identity, traits, communication style, decision style, and secrets
+// are provided directly in the agent's system prompt.
 func SeedCharacter(ctx context.Context, store *Store, agentName string, char *scenarios.Character) error {
-	// Identity: Core character information
-	identityContent := buildIdentityContent(agentName, char)
-	if identityContent != "" {
-		identityQueries := []string{
-			"who am I?",
-			"what is my identity?",
-			"describe myself",
-		}
-
-		for _, query := range identityQueries {
-			embedding, err := store.Embed(ctx, query)
-			if err != nil {
-				return fmt.Errorf("failed to embed identity query: %w", err)
-			}
-
-			store.Add(Memory{
-				Content:   identityContent,
-				Embedding: embedding,
-				Metadata: map[string]string{
-					"agent":      agentName,
-					"type":       "character",
-					"category":   "identity",
-					"indexed_by": query,
-				},
-			})
-		}
-	}
-
-	// Background: Personal history
-	if char.Basics.Background != "" {
+	// Background: Personal history (chunked if long)
+	if char.Internal.Background != "" {
 		backgroundQueries := []string{
 			"what is my background?",
 			"what is my history?",
 		}
 
 		// Chunk background if it's long
-		chunks := ChunkText(char.Basics.Background, 300)
+		chunks := ChunkText(char.Internal.Background, 300)
 
 		for _, chunk := range chunks {
 			for _, query := range backgroundQueries {
@@ -70,89 +44,9 @@ func SeedCharacter(ctx context.Context, store *Store, agentName string, char *sc
 		}
 	}
 
-	// Communication Style
-	if char.Basics.CommunicationStyle != "" {
-		commQueries := []string{
-			"how do I communicate?",
-			"how do I speak?",
-			"what is my communication style?",
-		}
-
-		for _, query := range commQueries {
-			embedding, err := store.Embed(ctx, query)
-			if err != nil {
-				return fmt.Errorf("failed to embed communication query: %w", err)
-			}
-
-			store.Add(Memory{
-				Content:   char.Basics.CommunicationStyle,
-				Embedding: embedding,
-				Metadata: map[string]string{
-					"agent":      agentName,
-					"type":       "character",
-					"category":   "communication",
-					"indexed_by": query,
-				},
-			})
-		}
-	}
-
-	// Decision Style
-	if char.Basics.DecisionStyle != "" {
-		decisionQueries := []string{
-			"how do I make decisions?",
-			"what is my decision style?",
-		}
-
-		for _, query := range decisionQueries {
-			embedding, err := store.Embed(ctx, query)
-			if err != nil {
-				return fmt.Errorf("failed to embed decision query: %w", err)
-			}
-
-			store.Add(Memory{
-				Content:   char.Basics.DecisionStyle,
-				Embedding: embedding,
-				Metadata: map[string]string{
-					"agent":      agentName,
-					"type":       "character",
-					"category":   "decision_style",
-					"indexed_by": query,
-				},
-			})
-		}
-	}
-
-	// Traits
-	if len(char.Basics.Traits) > 0 {
-		traitsContent := fmt.Sprintf("Your key traits: %s", strings.Join(char.Basics.Traits, ", "))
-		traitsQueries := []string{
-			"what are my traits?",
-			"describe my personality",
-		}
-
-		for _, query := range traitsQueries {
-			embedding, err := store.Embed(ctx, query)
-			if err != nil {
-				return fmt.Errorf("failed to embed traits query: %w", err)
-			}
-
-			store.Add(Memory{
-				Content:   traitsContent,
-				Embedding: embedding,
-				Metadata: map[string]string{
-					"agent":      agentName,
-					"type":       "character",
-					"category":   "traits",
-					"indexed_by": query,
-				},
-			})
-		}
-	}
-
-	// Skills
-	if len(char.Basics.Skills) > 0 {
-		skillsContent := fmt.Sprintf("Your skills: %s", strings.Join(char.Basics.Skills, ", "))
+	// Unique Skills (when relevant to query)
+	if len(char.External.UniqueSkills) > 0 {
+		skillsContent := fmt.Sprintf("Your skills: %s", strings.Join(char.External.UniqueSkills, ", "))
 		skillsQueries := []string{
 			"what am I good at?",
 			"what are my skills?",
@@ -177,59 +71,53 @@ func SeedCharacter(ctx context.Context, store *Store, agentName string, char *sc
 		}
 	}
 
-	// Values
-	if len(char.Basics.Values) > 0 {
-		valuesContent := fmt.Sprintf("Your values: %s", strings.Join(char.Basics.Values, ", "))
-		valuesQueries := []string{
-			"what do I value?",
-			"what are my principles?",
-		}
-
-		for _, query := range valuesQueries {
-			embedding, err := store.Embed(ctx, query)
-			if err != nil {
-				return fmt.Errorf("failed to embed values query: %w", err)
-			}
-
-			store.Add(Memory{
-				Content:   valuesContent,
-				Embedding: embedding,
-				Metadata: map[string]string{
-					"agent":      agentName,
-					"type":       "character",
-					"category":   "values",
-					"indexed_by": query,
-				},
-			})
-		}
-	}
-
 	return nil
 }
 
-// buildIdentityContent creates a concise identity string from character basics.
-func buildIdentityContent(agentName string, char *scenarios.Character) string {
+// buildExternalIdentity creates identity string from external (observable) character info.
+func buildExternalIdentity(targetName string, char *scenarios.Character) string {
 	parts := make([]string, 0)
 
-	// Start with the agent's actual name
-	if char.Basics.Archetype != "" {
-		parts = append(parts, fmt.Sprintf("Your name is %s. You are %s", agentName, char.Basics.Archetype))
+	// Start with the agent's actual name and archetype
+	if char.External.Archetype != "" {
+		parts = append(parts, fmt.Sprintf("%s is %s", targetName, char.External.Archetype))
 	} else {
-		parts = append(parts, fmt.Sprintf("Your name is %s", agentName))
+		parts = append(parts, targetName)
 	}
 
-	if char.Basics.Description != "" {
-		parts = append(parts, char.Basics.Description)
+	// Add description (observable)
+	if char.External.Description != "" {
+		parts = append(parts, char.External.Description)
+	}
+
+	// Add communication style (observable when they speak)
+	if char.External.CommunicationStyle != "" {
+		parts = append(parts, fmt.Sprintf("Communication style: %s", char.External.CommunicationStyle))
+	}
+
+	// Add positive traits (observable)
+	if len(char.External.PositiveTraits) > 0 {
+		parts = append(parts, fmt.Sprintf("Positive traits: %s", strings.Join(char.External.PositiveTraits, ", ")))
+	}
+
+	// Add some negative traits (the obvious/observable ones)
+	if len(char.External.NegativeTraits) > 0 {
+		parts = append(parts, fmt.Sprintf("Notable flaws: %s", strings.Join(char.External.NegativeTraits, ", ")))
+	}
+
+	// Add unique skills (when demonstrated)
+	if len(char.External.UniqueSkills) > 0 {
+		parts = append(parts, fmt.Sprintf("Skills: %s", strings.Join(char.External.UniqueSkills, ", ")))
 	}
 
 	return strings.Join(parts, ". ")
 }
 
 // SeedOtherCharacter pre-seeds knowledge about another character.
-// Stores what this agent knows about another agent.
+// Only includes external/observable information (not secrets or internal thoughts).
 func SeedOtherCharacter(ctx context.Context, store *Store, agentName string, targetName string, char *scenarios.Character) error {
-	// Build content about the other character (include their actual name)
-	content := buildIdentityContent(targetName, char)
+	// Build content about the other character using only external info
+	content := buildExternalIdentity(targetName, char)
 	if content == "" {
 		return nil
 	}

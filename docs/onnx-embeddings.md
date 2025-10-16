@@ -128,11 +128,12 @@ go build ./cmd/wonda
 
 **Linux example**:
 ```bash
-# Get ONNXRuntime
+# Get ONNXRuntime (GPU-enabled with CUDA support)
+# Note: Requires CUDA 12.x installed on your system
 curl -L -o onnxruntime.tgz \
-  https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz
+  https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz
 tar -xzf onnxruntime.tgz
-cp onnxruntime-linux-x64-1.22.0/lib/libonnxruntime* ./lib/
+cp onnxruntime-linux-x64-gpu-1.22.0/lib/libonnxruntime* ./lib/
 
 # Get Tokenizers
 curl -L -o libtokenizers.tar.gz \

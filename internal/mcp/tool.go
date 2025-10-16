@@ -17,6 +17,11 @@ type Tool struct {
 
 	// Handler is the actual function that executes when the tool is called
 	Handler ToolHandler
+
+	// EndsTurn marks if this tool ends the agent's turn (for socially visible actions)
+	// Turn-ending tools: speak, narrate_action, propose_solution, vote_on_proposal
+	// Non-turn-ending tools: perceive, internal_monologue, query_memory, view_goal, etc.
+	EndsTurn bool
 }
 
 // ToolHandler is the function signature for tool implementations.
@@ -45,4 +50,7 @@ type ToolResult struct {
 
 	// IsError indicates if the tool execution failed
 	IsError bool
+
+	// EndsTurn indicates if this tool ends the agent's turn
+	EndsTurn bool
 }

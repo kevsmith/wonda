@@ -153,12 +153,20 @@ func (g *InteractiveGoal) WithdrawProposal(proposalID, agentName string, turn in
 }
 
 // CheckConsensus checks if any proposal has been accepted.
-// If so, marks the goal as completed.
+// If so, marks the goal as completed and rejects all other pending proposals.
 func (g *InteractiveGoal) CheckConsensus(turn int) bool {
 	for _, proposal := range g.Proposals {
 		if proposal.Status == ProposalAccepted {
 			g.Status = GoalCompleted
 			g.CompletedAt = turn
+
+			// Reject all other pending proposals
+			for _, other := range g.Proposals {
+				if other.ID != proposal.ID && other.Status == ProposalPending {
+					other.Status = ProposalRejected
+					other.ResolvedAt = turn
+				}
+			}
 			return true
 		}
 	}

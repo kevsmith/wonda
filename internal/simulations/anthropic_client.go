@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	anthropic "github.com/liushuangls/go-anthropic/v2"
 
@@ -155,9 +156,21 @@ func (c *AnthropicClient) Chat(ctx context.Context, req ChatRequest) (ChatRespon
 		}
 	}
 
+	// Log extended thinking if found
+	if thinking != "" {
+		slog.Debug("successfully extracted extended thinking blocks", "length", len(thinking), "content", thinking)
+	}
+
 	// If no extended thinking found, try in-band parsing
 	if thinking == "" && c.parser != nil {
 		content, thinking = c.parser.Parse(content)
+		if thinking == "" {
+			if _, isNoOp := c.parser.(*NoOpParser); !isNoOp {
+				slog.Info("in-band thinking parser found no content", "hint", "check if model uses correct delimiters or if parser is misconfigured")
+			}
+		} else {
+			slog.Debug("successfully extracted thinking from in-band parser", "length", len(thinking), "content", thinking)
+		}
 	}
 
 	return ChatResponse{

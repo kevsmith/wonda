@@ -22,7 +22,7 @@ func initLogger(levelStr string) {
 	case "ERROR":
 		level = slog.LevelError
 	default:
-		level = slog.LevelWarn
+		level = slog.LevelInfo
 	}
 
 	opts := &slog.HandlerOptions{
@@ -39,7 +39,7 @@ func initLogger(levelStr string) {
 // GetLogger returns the global logger
 func GetLogger() *slog.Logger {
 	if logger == nil {
-		initLogger("WARN")
+		initLogger("INFO")
 	}
 	return logger
 }

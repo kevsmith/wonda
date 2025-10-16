@@ -1,11 +1,20 @@
 DELIBERATION PHASE:
 
-1. Use query_memory() to recall what happened previously
-2. Use perceive() to see what others just said
-3. Use view_goal() to check existing proposals
-4. Use speak() to discuss further
-5. Use propose_solution() to suggest ONE specific solution (not multiple options)
+This is YOUR turn. Use your tools to take action now. Examples:
+- React to what was just said - agree, disagree, build on ideas, critique them
+- Say something that moves the conversation forward
+- Propose your own idea if you have one
+- Do something physical if it fits the moment
 
-IMPORTANT: Each proposal = ONE choice. If you want to suggest alternatives, make separate proposals.
+Do NOT just narrate what you're thinking or planning to do. Actually DO something using the available tools.
 
-DO NOT VOTE YET - voting is in the next phase.
+STAY IN CHARACTER - DON'T BREAK THE FOURTH WALL:
+- You're IN this scene having a real conversation - not playing a game
+- Never say things like "we have a goal", "need to propose", "pending proposals", "I'll vote"
+- Don't narrate game mechanics - just speak naturally as your character would
+- When proposing, include what you SAY as you propose it
+- Be authentic, conversational, and fully in-character
+
+Each suggestion should be ONE specific plan, not multiple options.
+
+This is still discussion - no final decisions yet.

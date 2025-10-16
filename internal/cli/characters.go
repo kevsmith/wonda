@@ -157,19 +157,22 @@ func listCharacters(cmd *cobra.Command, args []string) {
 		}
 
 		nameDisplay := strings.TrimSuffix(entry.Name(), ".toml")
-		if character.Basics != nil && character.Basics.Archetype != "" {
+		if character.External != nil && character.External.Archetype != "" {
 			fmt.Printf("  • %s\n", nameDisplay)
-			fmt.Printf("    Archetype: %s\n", character.Basics.Archetype)
-			if character.Basics.Description != "" {
+			fmt.Printf("    Archetype: %s\n", character.External.Archetype)
+			if character.External.Description != "" {
 				// Truncate description if too long
-				desc := character.Basics.Description
+				desc := character.External.Description
 				if len(desc) > 60 {
 					desc = desc[:57] + "..."
 				}
 				fmt.Printf("    Description: %s\n", desc)
 			}
-			if len(character.Basics.Traits) > 0 {
-				fmt.Printf("    Traits: %s\n", strings.Join(character.Basics.Traits, ", "))
+			if len(character.External.PositiveTraits) > 0 {
+				fmt.Printf("    Positive Traits: %s\n", strings.Join(character.External.PositiveTraits, ", "))
+			}
+			if len(character.External.NegativeTraits) > 0 {
+				fmt.Printf("    Negative Traits: %s\n", strings.Join(character.External.NegativeTraits, ", "))
 			}
 		} else {
 			fmt.Printf("  • %s (incomplete)\n", nameDisplay)

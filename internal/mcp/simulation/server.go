@@ -21,6 +21,8 @@ func NewSimulationServer(world *WorldState) *mcp.Server {
 	// Register perception and action tools
 	server.RegisterTool(NewPerceiveTool(world))
 	server.RegisterTool(NewSpeakTool(world))
+	server.RegisterTool(NewNarrateActionTool(world))
+	server.RegisterTool(NewInternalMonologueTool(world))
 
 	// Register goal interaction tools
 	server.RegisterTool(NewListGoalsTool(world))

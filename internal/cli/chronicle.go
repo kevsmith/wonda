@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/poiesic/wonda/internal/chronicle"
@@ -218,10 +219,19 @@ func outputTurnMarkdown(t *chronicle.Turn) {
 			fmt.Printf("> %s\n\n", event.Reasoning)
 		}
 
-		// Dialogue
+		// Dialogue/Action/Monologue
 		if event.Dialogue != "" {
-			fmt.Printf("**💬 Says:**\n")
-			fmt.Printf("> \"%s\"\n\n", event.Dialogue)
+			switch event.Type {
+			case "action":
+				fmt.Printf("**🎬 Does:**\n")
+				fmt.Printf("> *%s*\n\n", event.Dialogue)
+			case "monologue":
+				fmt.Printf("**💭 Thinks:**\n")
+				fmt.Printf("> _%s_\n\n", event.Dialogue)
+			default: // "dialogue" or empty (default to dialogue)
+				fmt.Printf("**💬 Says:**\n")
+				fmt.Printf("> \"%s\"\n\n", event.Dialogue)
+			}
 		}
 
 		// Emotion
@@ -257,6 +267,31 @@ func outputTurnMarkdown(t *chronicle.Turn) {
 
 		fmt.Println("---")
 		fmt.Println()
+	}
+
+	// Goal completions
+	if len(t.GoalCompletions) > 0 {
+		fmt.Printf("### 🏆 Goal Completions\n\n")
+		for _, completion := range t.GoalCompletions {
+			statusEmoji := "✅"
+			if completion.Status == "failed" {
+				statusEmoji = "❌"
+			}
+
+			fmt.Printf("**%s Goal: %s**\n\n", statusEmoji, completion.GoalName)
+			fmt.Printf("**Solution:** %s\n\n", completion.Solution)
+			fmt.Printf("**Proposed by:** %s\n\n", completion.ProposedBy)
+
+			if len(completion.VotedYes) > 0 {
+				fmt.Printf("**Voted Yes:** %s\n\n", joinSlice(completion.VotedYes))
+			}
+			if len(completion.VotedNo) > 0 {
+				fmt.Printf("**Voted No:** %s\n\n", joinSlice(completion.VotedNo))
+			}
+
+			fmt.Println("---")
+			fmt.Println()
+		}
 	}
 }
 
@@ -342,4 +377,9 @@ func exportMarkdown(metadata *chronicle.Metadata, turns []chronicle.Turn) {
 	for _, turn := range turns {
 		outputTurnMarkdown(&turn)
 	}
+}
+
+// joinSlice joins a slice of strings with commas.
+func joinSlice(items []string) string {
+	return strings.Join(items, ", ")
 }

@@ -151,12 +151,12 @@ func (c *OpenAIClient) chatWithLibrary(ctx context.Context, req ChatRequest) (Ch
 			fieldPath := outOfBandParser.FieldPath()
 			thinking = extractJSONField(jsonData, fieldPath)
 
-			// Debug logging
+			// Log thinking extraction results
 			if thinking == "" {
-				slog.Debug("failed to extract reasoning from field path", "field_path", fieldPath)
+				slog.Info("out-of-band thinking parser found no content", "field_path", fieldPath, "hint", "check if model supports this field or if parser is misconfigured")
 				// Write full response to file for inspection
 				if err := os.WriteFile("/tmp/wonda-llm-response.json", jsonData, 0644); err == nil {
-					slog.Debug("full response written to file", "path", "/tmp/wonda-llm-response.json")
+					slog.Debug("full response written to file for inspection", "path", "/tmp/wonda-llm-response.json")
 				}
 				// Log first 1000 chars of response for quick debugging
 				preview := string(jsonData)
@@ -165,12 +165,19 @@ func (c *OpenAIClient) chatWithLibrary(ctx context.Context, req ChatRequest) (Ch
 				}
 				slog.Debug("response preview", "data", preview)
 			} else {
-				slog.Debug("successfully extracted reasoning", "length", len(thinking))
+				slog.Debug("successfully extracted thinking", "length", len(thinking), "content", thinking)
 			}
 		}
 	} else {
 		// For in-band parsers, parse the content text
 		content, thinking = c.parser.Parse(content)
+		if thinking == "" && c.parser != nil {
+			if _, isNoOp := c.parser.(*NoOpParser); !isNoOp {
+				slog.Info("in-band thinking parser found no content", "hint", "check if model uses correct delimiters or if parser is misconfigured")
+			}
+		} else if thinking != "" {
+			slog.Debug("successfully extracted thinking from in-band parser", "length", len(thinking), "content", thinking)
+		}
 	}
 
 	return ChatResponse{

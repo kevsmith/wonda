@@ -23,18 +23,19 @@ tasks:
             - rm -rf {{.BUILD_DIR}}
 
     download-libs-linux:
-        desc: Download Linux runtime libraries
+        desc: Download Linux runtime libraries (GPU-enabled, requires CUDA 12.x)
         status:
             - test -f lib/libonnxruntime.so.1.22.0
             - test -f lib/libonnxruntime_providers_shared.so
+            - test -f lib/libonnxruntime_providers_cuda.so
             - test -f lib/libtokenizers.a
         cmds:
             - mkdir -p lib
-            - curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-1.22.0.tgz | tar -xz --strip-components=2 -C lib onnxruntime-linux-x64-1.22.0/lib/libonnxruntime.so.1.22.0 onnxruntime-linux-x64-1.22.0/lib/libonnxruntime_providers_shared.so
+            - curl -sL https://github.com/microsoft/onnxruntime/releases/download/v1.22.0/onnxruntime-linux-x64-gpu-1.22.0.tgz | tar -xz --strip-components=2 -C lib onnxruntime-linux-x64-gpu-1.22.0/lib/libonnxruntime.so.1.22.0 onnxruntime-linux-x64-gpu-1.22.0/lib/libonnxruntime_providers_shared.so onnxruntime-linux-x64-gpu-1.22.0/lib/libonnxruntime_providers_cuda.so
             - curl -sL https://github.com/daulet/tokenizers/releases/download/v1.23.0/libtokenizers.linux-amd64.tar.gz | tar -xz -C lib
 
     build-linux-amd64:
-        desc: Build Linux AMD64 release package
+        desc: Build Linux AMD64 binary (GPU-enabled)
         deps: [download-libs-linux]
         vars:
             PLATFORM: linux-amd64
@@ -46,7 +47,15 @@ tasks:
             - GOOS={{.GOOS}} GOARCH={{.GOARCH}} CGO_ENABLED=1 CGO_LDFLAGS="-L$(pwd)/lib -Wl,-rpath,\$ORIGIN/lib" go build -ldflags "{{.LDFLAGS}}" -o {{.OUTPUT_DIR}}/{{.BINARY_NAME}} cmd/main.go
             - test -f {{.OUTPUT_DIR}}/lib/libonnxruntime.so.1.22.0 || cp lib/libonnxruntime.so.1.22.0 {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/libonnxruntime_providers_shared.so || cp lib/libonnxruntime_providers_shared.so {{.OUTPUT_DIR}}/lib/
+            - test -f {{.OUTPUT_DIR}}/lib/libonnxruntime_providers_cuda.so || cp lib/libonnxruntime_providers_cuda.so {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/libtokenizers.a || cp lib/libtokenizers.a {{.OUTPUT_DIR}}/lib/
+
+    package-linux-amd64:
+        desc: Create Linux AMD64 release archive
+        deps: [build-linux-amd64]
+        vars:
+            PLATFORM: linux-amd64
+        cmds:
             - cd {{.BUILD_DIR}} && tar -czf {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.tar.gz {{.BINARY_NAME}}-{{.PLATFORM}}
 
     download-libs-darwin-amd64:
@@ -62,7 +71,7 @@ tasks:
             - curl -sL https://github.com/daulet/tokenizers/releases/download/v1.23.0/libtokenizers.darwin-amd64.tar.gz | tar -xz -C lib/darwin-amd64
 
     build-darwin-amd64:
-        desc: Build macOS AMD64 release package
+        desc: Build macOS AMD64 binary
         deps: [download-libs-darwin-amd64]
         vars:
             PLATFORM: darwin-amd64
@@ -75,6 +84,13 @@ tasks:
             - test -f {{.OUTPUT_DIR}}/lib/libonnxruntime.dylib || cp lib/darwin-amd64/libonnxruntime.dylib {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/libonnxruntime_providers_shared.dylib || cp lib/darwin-amd64/libonnxruntime_providers_shared.dylib {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/libtokenizers.a || cp lib/darwin-amd64/libtokenizers.a {{.OUTPUT_DIR}}/lib/
+
+    package-darwin-amd64:
+        desc: Create macOS AMD64 release archive
+        deps: [build-darwin-amd64]
+        vars:
+            PLATFORM: darwin-amd64
+        cmds:
             - cd {{.BUILD_DIR}} && zip -q -r {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.zip {{.BINARY_NAME}}-{{.PLATFORM}}
 
     download-libs-darwin-arm64:
@@ -90,7 +106,7 @@ tasks:
             - curl -sL https://github.com/daulet/tokenizers/releases/download/v1.23.0/libtokenizers.darwin-arm64.tar.gz | tar -xz -C lib/darwin-arm64
 
     build-darwin-arm64:
-        desc: Build macOS ARM64 (Apple Silicon) release package
+        desc: Build macOS ARM64 (Apple Silicon) binary
         deps: [download-libs-darwin-arm64]
         vars:
             PLATFORM: darwin-arm64
@@ -103,6 +119,13 @@ tasks:
             - test -f {{.OUTPUT_DIR}}/lib/libonnxruntime.dylib || cp lib/darwin-arm64/libonnxruntime.dylib {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/libonnxruntime_providers_shared.dylib || cp lib/darwin-arm64/libonnxruntime_providers_shared.dylib {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/libtokenizers.a || cp lib/darwin-arm64/libtokenizers.a {{.OUTPUT_DIR}}/lib/
+
+    package-darwin-arm64:
+        desc: Create macOS ARM64 release archive
+        deps: [build-darwin-arm64]
+        vars:
+            PLATFORM: darwin-arm64
+        cmds:
             - cd {{.BUILD_DIR}} && zip -q -r {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.zip {{.BINARY_NAME}}-{{.PLATFORM}}
 
     download-libs-windows:
@@ -121,7 +144,7 @@ tasks:
             - rm /tmp/tokenizers-win.zip
 
     build-windows-amd64:
-        desc: Build Windows AMD64 release package
+        desc: Build Windows AMD64 binary
         deps: [download-libs-windows]
         vars:
             PLATFORM: windows-amd64
@@ -134,15 +157,30 @@ tasks:
             - test -f {{.OUTPUT_DIR}}/lib/onnxruntime.dll || cp lib/windows-amd64/onnxruntime.dll {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/onnxruntime_providers_shared.dll || cp lib/windows-amd64/onnxruntime_providers_shared.dll {{.OUTPUT_DIR}}/lib/
             - test -f {{.OUTPUT_DIR}}/lib/tokenizers.lib || cp lib/windows-amd64/tokenizers.lib {{.OUTPUT_DIR}}/lib/
+
+    package-windows-amd64:
+        desc: Create Windows AMD64 release archive
+        deps: [build-windows-amd64]
+        vars:
+            PLATFORM: windows-amd64
+        cmds:
             - cd {{.BUILD_DIR}} && zip -q -r {{.BINARY_NAME}}-{{.PLATFORM}}-{{.VERSION}}.zip {{.BINARY_NAME}}-{{.PLATFORM}}
 
     build-all:
-        desc: Build release packages for all platforms
+        desc: Build binaries for all platforms (no archives)
         cmds:
             - task: build-linux-amd64
             - task: build-darwin-amd64
             - task: build-darwin-arm64
             - task: build-windows-amd64
+
+    package-all:
+        desc: Create release archives for all platforms
+        cmds:
+            - task: package-linux-amd64
+            - task: package-darwin-amd64
+            - task: package-darwin-arm64
+            - task: package-windows-amd64
 
     build:
         desc: Build for current platform (auto-detects OS/arch)
@@ -155,8 +193,9 @@ tasks:
             - cd {{.BUILD_DIR}} && sha256sum *.tar.gz *.zip > checksums.txt 2>/dev/null || true
 
     release:
-        desc: Build all platforms and generate checksums
+        desc: Build all platforms, create archives, and generate checksums
         cmds:
             - task: clean
             - task: build-all
+            - task: package-all
             - task: checksums

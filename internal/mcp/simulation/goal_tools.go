@@ -119,7 +119,8 @@ func NewViewGoalTool(world *WorldState) *mcp.Tool {
 func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 	return &mcp.Tool{
 		Name:        "propose_solution",
-		Description: "Propose ONE specific solution for a goal. Each proposal must be a single, concrete choice - not a list of options.",
+		Description: "Propose ONE specific solution for a goal with an in-character pitch. Each proposal must be a single, concrete choice - not a list of options.",
+		EndsTurn:    true,
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -131,8 +132,12 @@ func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 					"type":        "string",
 					"description": "Your proposed solution - must be ONE specific choice (e.g., 'Bella's Italian Restaurant'), NOT multiple options or alternatives",
 				},
+				"comment": map[string]interface{}{
+					"type":        "string",
+					"description": "What you SAY out loud as you propose this - an in-character pitch for your idea. Sell it, explain what makes it good, be persuasive and authentic. EXAMPLES: \"How about we hit up The Skyline Lounge? Best cocktails in the city and the view is killer.\" or \"I'm thinking Bella's - intimate, great food, and the owner owes me a favor.\"",
+				},
 			},
-			"required": []string{"goal_name", "solution"},
+			"required": []string{"goal_name", "solution", "comment"},
 		},
 		Handler: func(ctx context.Context, arguments map[string]interface{}) (interface{}, error) {
 			agentName, ok := ctx.Value(runtime.AgentNameKey).(string)
@@ -150,6 +155,11 @@ func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 				return nil, fmt.Errorf("solution is required and must be a string")
 			}
 
+			comment, ok := arguments["comment"].(string)
+			if !ok || comment == "" {
+				return nil, fmt.Errorf("comment is required - you must say something as you propose")
+			}
+
 			goal, ok := world.Goals[goalName]
 			if !ok {
 				return nil, fmt.Errorf("goal not found: %s", goalName)
@@ -158,6 +168,16 @@ func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 			if goal.Status != GoalPending {
 				return nil, fmt.Errorf("cannot propose solutions to %s goals", goal.Status)
 			}
+
+			// Check if agent already has a proposal for this goal this turn
+			for _, proposal := range goal.Proposals {
+				if proposal.ProposedBy == agentName && proposal.ProposedAt == world.CurrentTurn {
+					return nil, fmt.Errorf("you already proposed a solution for this goal this turn")
+				}
+			}
+
+			// Add comment to pending dialogue (will be captured by simulation)
+			world.AddPendingDialogue(agentName, comment, MessageTypeDialogue)
 
 			proposalID := goal.AddProposal(agentName, solution, world.CurrentTurn)
 
@@ -180,7 +200,8 @@ func NewProposeSolutionTool(world *WorldState) *mcp.Tool {
 func NewVoteOnProposalTool(world *WorldState) *mcp.Tool {
 	return &mcp.Tool{
 		Name:        "vote_on_proposal",
-		Description: "Vote yes or no on a proposed solution. When all agents vote yes, the proposal is accepted and the goal is completed.",
+		Description: "Cast your vote on a proposal with an in-character statement. When all agents vote yes, the proposal is accepted and the goal is completed.",
+		EndsTurn:    true,
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
@@ -197,8 +218,12 @@ func NewVoteOnProposalTool(world *WorldState) *mcp.Tool {
 					"enum":        []string{"yes", "no"},
 					"description": "Your vote (yes or no)",
 				},
+				"comment": map[string]interface{}{
+					"type":        "string",
+					"description": "What you SAY out loud as you cast this vote - an in-character statement announcing your decision. Reference the specific proposal and express your authentic reaction to it. EXAMPLES: \"I'm on board with the rooftop idea - that place has the best view in town.\" or \"Not feeling the Italian restaurant, it's too far from here.\"",
+				},
 			},
-			"required": []string{"goal_name", "proposal_id", "vote"},
+			"required": []string{"goal_name", "proposal_id", "vote", "comment"},
 		},
 		Handler: func(ctx context.Context, arguments map[string]interface{}) (interface{}, error) {
 			agentName, ok := ctx.Value(runtime.AgentNameKey).(string)
@@ -225,15 +250,32 @@ func NewVoteOnProposalTool(world *WorldState) *mcp.Tool {
 				return nil, fmt.Errorf("vote must be 'yes' or 'no'")
 			}
 
+			comment, ok := arguments["comment"].(string)
+			if !ok || comment == "" {
+				return nil, fmt.Errorf("comment is required - you must say something as you vote")
+			}
+
 			goal, ok := world.Goals[goalName]
 			if !ok {
 				return nil, fmt.Errorf("goal not found: %s", goalName)
+			}
+
+			if goal.Status != GoalPending {
+				return nil, fmt.Errorf("cannot vote on %s goals", goal.Status)
 			}
 
 			proposal, ok := goal.Proposals[proposalID]
 			if !ok {
 				return nil, fmt.Errorf("proposal not found: %s", proposalID)
 			}
+
+			// Check if agent already voted on this proposal
+			if _, hasVoted := proposal.Votes[agentName]; hasVoted {
+				return nil, fmt.Errorf("you already voted on this proposal")
+			}
+
+			// Add comment to pending dialogue (will be captured by simulation)
+			world.AddPendingDialogue(agentName, comment, MessageTypeDialogue)
 
 			// Record vote
 			if err := goal.Vote(proposalID, agentName, vote, world.CurrentTurn); err != nil {

@@ -59,6 +59,7 @@ func (s *Server) ExecuteTool(ctx context.Context, toolCall *ToolCall) *ToolResul
 			ToolCallID: toolCall.ID,
 			Content:    err.Error(),
 			IsError:    true,
+			EndsTurn:   false,
 		}
 	}
 
@@ -68,6 +69,7 @@ func (s *Server) ExecuteTool(ctx context.Context, toolCall *ToolCall) *ToolResul
 			ToolCallID: toolCall.ID,
 			Content:    err.Error(),
 			IsError:    true,
+			EndsTurn:   tool.EndsTurn,
 		}
 	}
 
@@ -75,6 +77,7 @@ func (s *Server) ExecuteTool(ctx context.Context, toolCall *ToolCall) *ToolResul
 		ToolCallID: toolCall.ID,
 		Content:    result,
 		IsError:    false,
+		EndsTurn:   tool.EndsTurn,
 	}
 }
 

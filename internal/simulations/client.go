@@ -3,6 +3,7 @@ package simulations
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/poiesic/wonda/internal/config"
@@ -89,15 +90,19 @@ func NewClient(provider *config.Provider, model *config.Model) (Client, error) {
 // newResponseParser creates a ResponseParser based on the thinking parser configuration.
 func newResponseParser(cfg *config.ThinkingParserConfig) (ResponseParser, error) {
 	if cfg == nil {
+		slog.Info("no thinking parser configured, thinking will not be extracted")
 		return &NoOpParser{}, nil
 	}
 
 	switch cfg.Type {
 	case config.ThinkingParserNone:
+		slog.Info("thinking parser disabled")
 		return &NoOpParser{}, nil
 	case config.ThinkingParserInBand:
+		slog.Info("configured in-band thinking parser", "start_delimiter", cfg.StartDelimiter, "end_delimiter", cfg.EndDelimiter)
 		return NewInBandParser(cfg.StartDelimiter, cfg.EndDelimiter), nil
 	case config.ThinkingParserOutOfBand:
+		slog.Info("configured out-of-band thinking parser", "field_path", cfg.FieldPath)
 		return NewOutOfBandParser(cfg.FieldPath), nil
 	default:
 		return nil, fmt.Errorf("unknown thinking parser type: %s", cfg.Type)

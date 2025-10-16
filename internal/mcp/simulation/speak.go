@@ -19,13 +19,14 @@ type SpeakResult struct {
 func NewSpeakTool(world *WorldState) *mcp.Tool {
 	return &mcp.Tool{
 		Name:        "speak",
-		Description: "Say something to nearby agents. Your message will be heard by all agents at your current location.",
+		Description: "Say something out loud to nearby agents. Your message will be heard by all agents at your current location.",
+		EndsTurn:    true,
 		InputSchema: map[string]interface{}{
 			"type": "object",
 			"properties": map[string]interface{}{
 				"message": map[string]interface{}{
 					"type":        "string",
-					"description": "What you want to say",
+					"description": "The exact words you're saying out loud. ONLY include spoken dialogue - no narration of actions, no stage directions, no meta-commentary about what you'll do or say. GOOD EXAMPLES: \"How about we grab dinner at that Italian place?\" or \"I don't know, seems pretty far from here.\" BAD EXAMPLES: \"I'll order a drink\" (narration), \"I'm going to tell him...\" (meta-narration), \"So here's my vote\" (breaking character)",
 				},
 			},
 			"required": []string{"message"},
@@ -44,7 +45,7 @@ func NewSpeakTool(world *WorldState) *mcp.Tool {
 			}
 
 			// Add message to world conversation history
-			world.AddMessage(agentName, message, "")
+			world.AddMessage(agentName, message, "", MessageTypeDialogue)
 
 			return &SpeakResult{
 				Success: true,

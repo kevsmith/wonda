@@ -39,9 +39,10 @@ type Simulation struct {
 	MemoryStore *memory.Store
 
 	// Chronicle
-	chroniclePath     string            // Path to chronicle JSONL file
-	chronicleFile     *os.File          // Open file handle for appending
-	currentTurnEvents []chronicle.Event // Events being collected for current turn
+	chroniclePath          string                   // Path to chronicle JSONL file
+	chronicleFile          *os.File                 // Open file handle for appending
+	currentTurnEvents      []chronicle.Event        // Events being collected for current turn
+	currentGoalCompletions []chronicle.GoalCompletion // Goal completions for current turn
 }
 
 // NewSimulation creates a new simulation from a scenario.
@@ -241,12 +242,62 @@ func (s *Simulation) initializeChronicle() error {
 	return nil
 }
 
+// cleanDialogue removes common artifacts from agent dialogue.
+func cleanDialogue(dialogue string) string {
+	// Remove leading/trailing whitespace
+	dialogue = strings.TrimSpace(dialogue)
+
+	// Remove character name prefixes: "Name: " or "**Name:** " or "Name said: "
+	// Match patterns like "Brad: ", "**Brad:** ", "Brad said: ", etc.
+	dialogue = regexp.MustCompile(`^(?:\*\*)?[A-Z][a-z]+(?:\*\*)?:\s*`).ReplaceAllString(dialogue, "")
+	dialogue = regexp.MustCompile(`^(?:\*\*)?[A-Z][a-z]+(?:\*\*)?\s+said:\s*`).ReplaceAllString(dialogue, "")
+
+	// Remove @speak prefix artifacts
+	dialogue = regexp.MustCompile(`^@speak:\s*`).ReplaceAllString(dialogue, "")
+
+	// Remove "You [verb]" narration at the start: "You look at...", "You turn to...", etc.
+	dialogue = regexp.MustCompile(`^You\s+[a-z]+\s+[^.!?"]*[.!?,]\s*`).ReplaceAllString(dialogue, "")
+
+	// Remove asterisk narration/stage directions: *text*
+	// But preserve text between quotes
+	dialogue = regexp.MustCompile(`\*[^*"]+\*`).ReplaceAllString(dialogue, "")
+
+	// Remove tool call syntax: vote_on_proposal(...), speak(...), etc.
+	dialogue = regexp.MustCompile(`\w+\([^)]*\)`).ReplaceAllString(dialogue, "")
+
+	// Remove common tool result messages
+	dialogue = regexp.MustCompile(`(?i)(✅|✓)\s*(done|complete|voting complete)\.?`).ReplaceAllString(dialogue, "")
+
+	// Clean up multiple spaces
+	dialogue = regexp.MustCompile(`\s+`).ReplaceAllString(dialogue, " ")
+
+	// If there's quoted text, extract just the quoted portion
+	// Pattern: any text "actual dialogue" any text -> actual dialogue
+	quotedPattern := regexp.MustCompile(`"([^"]+)"`)
+	if matches := quotedPattern.FindStringSubmatch(dialogue); len(matches) > 1 {
+		dialogue = matches[1]
+	}
+
+	// Remove leading/trailing quotes if they wrap the entire dialogue
+	dialogue = strings.TrimSpace(dialogue)
+	if (strings.HasPrefix(dialogue, `"`) && strings.HasSuffix(dialogue, `"`)) ||
+		(strings.HasPrefix(dialogue, `"`) && strings.HasSuffix(dialogue, `"`)) {
+		dialogue = dialogue[1 : len(dialogue)-1]
+	}
+
+	return strings.TrimSpace(dialogue)
+}
+
 // captureEvent adds an event to the current turn's event list.
-func (s *Simulation) captureEvent(agentName, dialogue, reasoning string) {
+func (s *Simulation) captureEvent(agentName, dialogue, reasoning, msgType string) {
+	// Clean the dialogue to remove artifacts
+	dialogue = cleanDialogue(dialogue)
+
 	// Get agent's current emotional state
 	agent := s.Agents[agentName]
 	event := chronicle.Event{
 		AgentName: agentName,
+		Type:      msgType,
 		Dialogue:  dialogue,
 		Reasoning: reasoning,
 	}
@@ -268,6 +319,44 @@ func (s *Simulation) captureEvent(agentName, dialogue, reasoning string) {
 	s.currentTurnEvents = append(s.currentTurnEvents, event)
 }
 
+// captureGoalCompletionsForTurn scans for goals that were completed or failed this turn.
+func (s *Simulation) captureGoalCompletionsForTurn(turn int) {
+	for goalName, goal := range s.World.Goals {
+		// Only capture goals that changed status this turn
+		if goal.CompletedAt != turn {
+			continue
+		}
+
+		// Find the accepted proposal
+		for _, proposal := range goal.Proposals {
+			if proposal.Status == mcpsim.ProposalAccepted {
+				// Collect voters
+				votedYes := []string{}
+				votedNo := []string{}
+				for agentName, vote := range proposal.Votes {
+					if vote.Choice == "yes" {
+						votedYes = append(votedYes, agentName)
+					} else {
+						votedNo = append(votedNo, agentName)
+					}
+				}
+
+				// Capture the completion
+				s.currentGoalCompletions = append(s.currentGoalCompletions, chronicle.GoalCompletion{
+					GoalName:    goalName,
+					Status:      string(goal.Status),
+					Solution:    proposal.Description,
+					ProposedBy:  proposal.ProposedBy,
+					VotedYes:    votedYes,
+					VotedNo:     votedNo,
+					CompletedAt: turn,
+				})
+				break // Only one accepted proposal per goal
+			}
+		}
+	}
+}
+
 // writeTurnToChronicle writes the current turn's events to the chronicle and clears them.
 func (s *Simulation) writeTurnToChronicle(turnNumber int) error {
 	if s.chronicleFile == nil {
@@ -276,9 +365,10 @@ func (s *Simulation) writeTurnToChronicle(turnNumber int) error {
 
 	// Create turn record
 	turn := chronicle.Turn{
-		Type:   "turn",
-		Number: turnNumber,
-		Events: s.currentTurnEvents,
+		Type:            "turn",
+		Number:          turnNumber,
+		Events:          s.currentTurnEvents,
+		GoalCompletions: s.currentGoalCompletions,
 	}
 
 	// Convert to JSON
@@ -292,8 +382,9 @@ func (s *Simulation) writeTurnToChronicle(turnNumber int) error {
 		return fmt.Errorf("failed to write turn: %w", err)
 	}
 
-	// Clear events for next turn
+	// Clear events and completions for next turn
 	s.currentTurnEvents = nil
+	s.currentGoalCompletions = nil
 
 	return nil
 }
@@ -316,6 +407,7 @@ func (s *Simulation) Start(ctx context.Context) error {
 	}()
 
 	// Display scenario information
+	slog.Info("chronicle", "file", s.chroniclePath)
 	slog.Info("starting simulation", "name", s.Scenario.Basics.Name)
 	slog.Info("scenario", "description", s.Scenario.Basics.Description)
 	slog.Info("setting", "location", s.Scenario.Basics.Location, "time", s.Scenario.Basics.TOD)
@@ -325,7 +417,7 @@ func (s *Simulation) Start(ctx context.Context) error {
 
 	for _, agentName := range s.TurnOrder {
 		agent := s.Agents[agentName]
-		slog.Info("agent", "name", agentName, "archetype", agent.Character.Basics.Archetype)
+		slog.Info("agent", "name", agentName, "archetype", agent.Character.External.Archetype)
 	}
 
 	// Initialize goals in world state
@@ -363,8 +455,19 @@ func (s *Simulation) Start(ctx context.Context) error {
 			// Track proposals before this agent's turn
 			proposalsBefore := s.countProposals()
 
+			// On turn 1, include scene context in prompt
+			var sceneCtx *SceneContext
+			if turn == 1 {
+				sceneCtx = &SceneContext{
+					Location:   s.Scenario.Basics.Location,
+					Time:       s.Scenario.Basics.TOD,
+					Atmosphere: s.Scenario.Basics.Atmosphere,
+					Backstory:  s.Scenario.Basics.Backstory,
+				}
+			}
+
 			// Agent deliberates: perceive, speak, propose
-			response, err := agent.Think(agentCtx, deliberationSituation, deliberationTools, s.MCPServer)
+			response, err := agent.Think(agentCtx, deliberationSituation, sceneCtx, deliberationTools, s.MCPServer)
 			if err != nil {
 				return fmt.Errorf("agent %s failed to deliberate: %w", agentName, err)
 			}
@@ -386,7 +489,7 @@ func (s *Simulation) Start(ctx context.Context) error {
 			// Add to conversation history
 			if len(s.World.ConversationHistory) == 0 ||
 				s.World.ConversationHistory[len(s.World.ConversationHistory)-1].AgentName != agentName {
-				s.World.AddMessage(agentName, response.Message, response.Thinking)
+				s.World.AddMessage(agentName, response.Message, response.Thinking, mcpsim.MessageTypeDialogue)
 			}
 
 			// Capture episodic memory
@@ -395,13 +498,23 @@ func (s *Simulation) Start(ctx context.Context) error {
 			}
 
 			// Capture event for chronicle
-			s.captureEvent(agentName, response.Message, response.Thinking)
+			s.captureEvent(agentName, response.Message, response.Thinking, "dialogue")
+
+			// Capture pending dialogue from tool calls (proposal/vote comments)
+			for _, msg := range s.World.PendingDialogue {
+				s.captureEvent(msg.AgentName, msg.Content, "", string(msg.Type))
+				s.captureEpisodicMemory(agentCtx, msg.AgentName, msg.Content, turn)
+			}
+			s.World.ClearPendingDialogue()
 		}
 
 		// Check for automatic consensus (identical proposals)
 		if s.checkAutomaticConsensus(turn) {
 			// Goals completed via automatic consensus, skip voting
 			slog.Info("automatic consensus detected, skipping voting phase")
+
+			// Capture goal completions from automatic consensus
+			s.captureGoalCompletionsForTurn(turn)
 		} else {
 			// Phase 2: Voting - agents vote on all pending proposals
 			slog.Debug("voting phase starting")
@@ -420,7 +533,8 @@ func (s *Simulation) Start(ctx context.Context) error {
 				votesBefore := s.collectVotes()
 
 				// Agent votes on all pending proposals
-				response, err := agent.Think(agentCtx, votingSituation, votingTools, s.MCPServer)
+				// No scene context needed for voting phase (not turn 1)
+				response, err := agent.Think(agentCtx, votingSituation, nil, votingTools, s.MCPServer)
 				if err != nil {
 					return fmt.Errorf("agent %s failed to vote: %w", agentName, err)
 				}
@@ -438,11 +552,20 @@ func (s *Simulation) Start(ctx context.Context) error {
 				s.displayNewVotes(agentName, votesBefore, votesAfter)
 
 				// Capture event for chronicle
-				s.captureEvent(agentName, response.Message, response.Thinking)
+				s.captureEvent(agentName, response.Message, response.Thinking, "dialogue")
+
+				// Capture pending dialogue from tool calls (vote comments)
+				for _, msg := range s.World.PendingDialogue {
+					s.captureEvent(msg.AgentName, msg.Content, "", string(msg.Type))
+				}
+				s.World.ClearPendingDialogue()
 			}
 
 			// Display voting results
 			s.displayVotingResults()
+
+			// Capture goal completions that occurred during voting
+			s.captureGoalCompletionsForTurn(turn)
 		}
 
 		// Write turn events to chronicle

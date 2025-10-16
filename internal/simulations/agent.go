@@ -83,18 +83,26 @@ func (a *Agent) ApplyInitialState(initial *scenarios.InitialState) {
 	}
 }
 
+// SceneContext contains scene information to be included in prompts.
+type SceneContext struct {
+	Location   string
+	Time       string
+	Atmosphere string
+	Backstory  string
+}
+
 // Think sends a prompt to the agent's LLM and returns the response.
 // It includes the character personality, current state, and available tools.
 // The agent discovers goals and world state through MCP tools.
 // This method handles the tool execution loop internally - if the LLM requests tool calls,
 // they are executed and the results are sent back to the LLM until a final response is obtained.
-func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]interface{}, executor ToolExecutor) (ChatResponse, error) {
+func (a *Agent) Think(ctx context.Context, situation string, sceneCtx *SceneContext, tools []map[string]interface{}, executor ToolExecutor) (ChatResponse, error) {
 	if a.Client == nil {
 		return ChatResponse{}, fmt.Errorf("agent %s has no LLM client", a.Name)
 	}
 
 	// Build the initial prompt using template
-	systemPrompt, err := a.buildPrompt(situation)
+	systemPrompt, err := a.buildPrompt(situation, sceneCtx)
 	if err != nil {
 		return ChatResponse{}, fmt.Errorf("failed to build prompt: %w", err)
 	}
@@ -133,6 +141,7 @@ func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]
 		})
 
 		// Execute tools and collect results
+		turnEnded := false
 		for _, toolCall := range response.ToolCalls {
 			// Execute the tool
 			mcpToolCall := &mcp.ToolCall{
@@ -141,6 +150,11 @@ func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]
 				Arguments: toolCall.Arguments,
 			}
 			result := executor.ExecuteTool(ctx, mcpToolCall)
+
+			// Check if this tool ends the turn
+			if result.EndsTurn {
+				turnEnded = true
+			}
 
 			// Add tool result to messages
 			// Format the result as JSON for better LLM parsing
@@ -163,6 +177,11 @@ func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]
 				Content: resultContent,
 			})
 		}
+
+		// If a turn-ending tool was called, stop the loop
+		if turnEnded {
+			return response, nil
+		}
 	}
 
 	// If we hit max iterations, return what we have
@@ -173,7 +192,8 @@ func (a *Agent) Think(ctx context.Context, situation string, tools []map[string]
 
 // buildPrompt creates the full prompt using the template system.
 // The prompt template is loaded from the prompts package.
-func (a *Agent) buildPrompt(situation string) (string, error) {
+// If sceneCtx is provided (typically on turn 1), it includes scene information.
+func (a *Agent) buildPrompt(situation string, sceneCtx *SceneContext) (string, error) {
 	// Get prompt template
 	promptTemplate, err := prompts.GetPrompt("agent_turn")
 	if err != nil {
@@ -186,15 +206,17 @@ func (a *Agent) buildPrompt(situation string) (string, error) {
 	}
 
 	data := struct {
-		Name      string
-		Character *scenarios.Character
-		State     AgentState
-		Situation string
+		Name         string
+		Character    *scenarios.Character
+		State        AgentState
+		Situation    string
+		SceneContext *SceneContext
 	}{
-		Name:      a.Name,
-		Character: a.Character,
-		State:     a.State,
-		Situation: situation,
+		Name:         a.Name,
+		Character:    a.Character,
+		State:        a.State,
+		Situation:    situation,
+		SceneContext: sceneCtx,
 	}
 
 	var buf bytes.Buffer
@@ -208,8 +230,8 @@ func (a *Agent) buildPrompt(situation string) (string, error) {
 // String returns a string representation of the agent.
 func (a *Agent) String() string {
 	archetype := "unknown"
-	if a.Character != nil && a.Character.Basics != nil {
-		archetype = a.Character.Basics.Archetype
+	if a.Character != nil && a.Character.External != nil {
+		archetype = a.Character.External.Archetype
 	}
 	return fmt.Sprintf("Agent{Name: %s, Character: %s, Provider: %s, Model: %s}",
 		a.Name, archetype, a.Provider, a.Model)

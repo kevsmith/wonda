@@ -69,6 +69,7 @@ type Agent struct {
 type BasicScenarioInformation struct {
 	Name        string            `toml:"name"`
 	Description string            `toml:"description"`
+	Backstory   string            `toml:"backstory"`
 	Tags        []string          `toml:"tags"`
 	Location    string            `toml:"location"`
 	TOD         string            `toml:"time"`

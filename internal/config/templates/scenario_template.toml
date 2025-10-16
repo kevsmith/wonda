@@ -7,6 +7,10 @@ name = ""
 # Required: What the scenario simulates
 description = ""
 
+# Set up the scene for agents
+# Not required but strongly recommended
+backstory = ""
+
 # Optional: Categorization labels
 tags = []
 
